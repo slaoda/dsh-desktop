@@ -47,9 +47,9 @@
 **说明：** 用管理器拥有的 Overlay 隔离已验证 entry id，并在失败或中断时恢复。
 
 **验收：**
-- [ ] Overlay 使用原子写入并只包含校验过的 `id` 与 `disabled: true`。
-- [ ] 修复事务在动作前落盘，完成后清除，初始化可恢复未完成事务。
-- [ ] 用户原始 `cordis.patch.yml` 和插件数据不被修改。
+- [x] Overlay 使用原子写入并只包含校验过的 `id` 与 `disabled: true`。
+- [x] 修复事务在动作前落盘，完成后清除，初始化可恢复未完成事务。
+- [x] 用户原始 `cordis.patch.yml` 和插件数据不被修改。
 
 **验证：** `npm test -- tests/plugin-quarantine.test.ts tests/repair-transaction.test.ts`。
 **依赖：** 任务 2、3。
