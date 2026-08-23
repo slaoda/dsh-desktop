@@ -3,7 +3,7 @@ import semver from 'semver'
 export { channels } from './ipc-channels'
 
 export const officialPackageName = '@deepseek-ai/dsh' as const
-export const bundledDshVersion = '0.1.0-rc.6' as const
+export const bundledDshVersion = '0.1.1-rc.2' as const
 
 export const exactVersionSchema = z.string().min(1).max(80).regex(/^[0-9A-Za-z][0-9A-Za-z.+-]*$/).refine((value) => semver.valid(value) !== null)
 export const localePreferenceSchema = z.enum(['system', 'zh-CN', 'en-US'])

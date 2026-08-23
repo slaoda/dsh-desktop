@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const releaseDir = path.join(root, 'release')
-const dshRoot = path.join(root, 'build-resources', 'dsh', '0.1.0-rc.6')
+const dshRoot = path.join(root, 'build-resources', 'dsh', '0.1.1-rc.2')
 
 async function npmSbom(cwd: string, omitDev: boolean): Promise<string> {
   const npmCli = process.env.npm_execpath

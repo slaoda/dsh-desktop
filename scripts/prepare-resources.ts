@@ -7,10 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { pruneBundledResources, type ReleaseArch, type ReleasePlatform } from './prune-bundled-resources.js'
 
 const nodeVersion = '24.18.1'
-const dshVersion = '0.1.0-rc.6'
-// Keep the bundled release reproducible if a later prerelease satisfies the
-// official package's caret ranges but is only partially available on npm.
-const dshDependencyCutoff = '2026-08-14T00:00:00.000Z'
+const dshVersion = '0.1.1-rc.2'
 const pnpmVersion = '11.22.0'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -132,7 +129,10 @@ async function main(): Promise<void> {
     name: 'dsh-desktop-bundled-dsh', version: '0.0.0', private: true,
     dependencies: { '@deepseek-ai/dsh': dshVersion }
   })}\n`)
-  await run(node, [npmCli, 'install', '--prefix', dshRoot, '--no-audit', '--no-fund', '--prefer-offline', `--before=${dshDependencyCutoff}`, '--registry=https://registry.npmjs.org/'])
+  // The official package is exact. npm's --before filter currently rejects valid
+  // prerelease dependency ranges such as ^0.1.1-rc.2, so the generated lockfile,
+  // SBOM, package identity check, and release SHA256 own artifact traceability.
+  await run(node, [npmCli, 'install', '--prefix', dshRoot, '--no-audit', '--no-fund', '--prefer-offline', '--legacy-peer-deps', '--registry=https://registry.npmjs.org/'])
   const manifest = JSON.parse(await readFile(path.join(dshRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8')) as { name?: string; version?: string }
   if (manifest.name !== '@deepseek-ai/dsh' || manifest.version !== dshVersion) throw new Error('预装官方 DSH 校验失败')
   const pruned = await pruneBundledResources(dshRoot, platform as ReleasePlatform, arch as ReleaseArch)

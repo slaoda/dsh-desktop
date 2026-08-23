@@ -11,7 +11,7 @@ const arch = process.arch
 const runtime = path.join(root, 'build-resources', 'runtime')
 const node = platform === 'win32' ? path.join(runtime, 'node.exe') : path.join(runtime, 'bin', 'node')
 const runtimeBin = path.join(root, 'build-resources', 'runtime-bin')
-const packageRoot = path.join(root, 'build-resources', 'dsh', '0.1.0-rc.6', 'node_modules', '@deepseek-ai', 'dsh')
+const packageRoot = path.join(root, 'build-resources', 'dsh', '0.1.1-rc.2', 'node_modules', '@deepseek-ai', 'dsh')
 const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8')) as { bin: string | Record<string, string> }
 const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin.dsh
 const entry = path.resolve(packageRoot, bin)
@@ -49,7 +49,7 @@ async function verifySelectedDshCli(): Promise<void> {
     command.once('error', reject)
     command.once('exit', (code) => code === 0 ? resolve(stdout.trim()) : reject(new Error(`当前 DSH CLI 退出码 ${code}: ${stderr}`)))
   })
-  if (output !== '0.1.0-rc.6') throw new Error(`当前 DSH CLI 版本不正确：${output}`)
+  if (output !== '0.1.1-rc.2') throw new Error(`当前 DSH CLI 版本不正确：${output}`)
 }
 
 await verifyBundledPnpm()
@@ -74,7 +74,11 @@ try {
   })
   const response = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   const html = await response.text()
-  if (!response.ok || !html.includes('window.__DSH_BOOT__')) throw new Error('官方 DSH 页面响应或启动标记校验失败')
+  const hasBootMarker = html.includes('window.__DSH_BOOT__') || html.includes('globalThis["__DSH_BOOT__"]')
+  if (!response.ok || !hasBootMarker) {
+    const contentType = response.headers.get('content-type') ?? 'unknown'
+    throw new Error(`官方 DSH 页面响应或启动标记校验失败：${response.status} ${contentType} ${html.slice(0, 240)}`)
+  }
   console.log(`Official DSH smoke passed: selected dsh CLI and pnpm 11.22.0 available, HTTP ${response.status}, bootstrap marker present`)
 } finally {
   child.kill('SIGTERM')

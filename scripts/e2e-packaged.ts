@@ -38,7 +38,7 @@ const packagedPnpm = path.join(resourcesPath, 'package-manager', 'pnpm', 'bin', 
 const packagedRuntimeBin = path.join(resourcesPath, 'runtime-bin')
 const packagedPnpmCommand = path.join(packagedRuntimeBin, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
 const packagedDshCommand = path.join(packagedRuntimeBin, process.platform === 'win32' ? 'dsh.cmd' : 'dsh')
-const packagedDshEntry = path.join(resourcesPath, 'dsh', '0.1.0-rc.6', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+const packagedDshEntry = path.join(resourcesPath, 'dsh', '0.1.1-rc.2', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 if (!existsSync(packagedNode) || !existsSync(packagedNpm) || !existsSync(packagedPnpm) || !existsSync(packagedPnpmCommand) || !existsSync(packagedDshCommand) || !existsSync(packagedDshEntry)) {
   throw new Error(`打包应用的运行资源不完整：node=${existsSync(packagedNode)}, npm=${existsSync(packagedNpm)}, pnpm=${existsSync(packagedPnpm)}, pnpmCommand=${existsSync(packagedPnpmCommand)}, dshCommand=${existsSync(packagedDshCommand)}, dshEntry=${existsSync(packagedDshEntry)}`)
 }
@@ -73,7 +73,7 @@ const packagedDshVersion = await new Promise<string>((resolve, reject) => {
   command.once('error', reject)
   command.once('exit', (code) => code === 0 ? resolve(stdout.trim()) : reject(new Error(`打包 dsh 退出码 ${code}: ${stderr}`)))
 })
-if (packagedDshVersion !== '0.1.0-rc.6') throw new Error(`打包 dsh 版本不正确：${packagedDshVersion}`)
+if (packagedDshVersion !== '0.1.1-rc.2') throw new Error(`打包 dsh 版本不正确：${packagedDshVersion}`)
 const isolatedHome = await mkdtemp(path.join(os.tmpdir(), 'dsh-desktop-e2e-'))
 const removableVersion = '0.0.1'
 const failingVersion = '0.0.2'
@@ -148,6 +148,7 @@ try {
   await removableRow.waitFor()
   const uninstallButton = removableRow.getByRole('button', { name: /卸载|Uninstall/ })
   await uninstallButton.waitFor()
+  manager.once('dialog', (dialog) => { void dialog.accept() })
   await uninstallButton.click()
   await manager.getByText(removableVersion, { exact: true }).waitFor({ state: 'detached' })
   if (existsSync(path.join(isolatedHome, 'electron', 'dsh-versions', removableVersion))) throw new Error('卸载后版本目录仍然存在')
@@ -171,7 +172,14 @@ try {
     await manager.getByRole('heading', { name: /^DSH\s+\d+\.\d+\.\d+/ }).waitFor({ timeout: 20_000 })
     await manager.screenshot({ path: process.env.DSH_DESKTOP_E2E_SCREENSHOT, fullPage: true })
   }
-  await dshWindow.close()
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().find((candidate) => candidate.getTitle().startsWith('DeepSeek Harness'))
+    if (!window) throw new Error('找不到 Harness 窗口')
+    window.close()
+    if (window.isVisible()) throw new Error('关闭到托盘后 Harness 窗口仍然可见')
+  })
+  await manager.getByText(/DSH 运行中|DSH running/, { exact: true }).waitFor({ timeout: 10_000 })
+  await manager.getByRole('button', { name: /停止|Stop/, exact: true }).click()
   await manager.getByText(/未运行|Not running/, { exact: true }).waitFor({ timeout: 10_000 })
   const failingRow = manager.locator('article.version-row').filter({ has: manager.getByText(failingVersion, { exact: true }) })
   await failingRow.getByRole('button', { name: /切换|Switch/ }).click()
@@ -186,7 +194,7 @@ try {
   const copiedError = await electronApp.evaluate(({ clipboard }) => clipboard.readText())
   if (!copiedError.includes('packaged DSH startup fixture failed')) throw new Error(`复制的启动错误不正确：${copiedError}`)
   if (process.env.DSH_DESKTOP_E2E_SCREENSHOT) await manager.screenshot({ path: process.env.DSH_DESKTOP_E2E_SCREENSHOT, fullPage: true })
-  console.log('Packaged E2E passed: selected dsh CLI, bundled pnpm, direct official DSH launch, version removal, manager UI, first-screen runtime error details, clipboard copy, and stop-on-close')
+  console.log('Packaged E2E passed: selected dsh CLI, bundled pnpm, direct official DSH launch, version removal, manager UI, close-to-tray, runtime error details, clipboard copy, and explicit stop')
 } finally {
   await electronApp.close()
   await rm(isolatedHome, { recursive: true, force: true })
