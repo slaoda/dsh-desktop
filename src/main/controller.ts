@@ -13,6 +13,7 @@ import { VersionManager, type ResolvedDsh } from './version-manager'
 import { BackupManager } from './backup-manager'
 import { ExternalInstallationManager } from './external-installations'
 import { RepairLaunchError, type StartupRepairEngine } from './repair/repair-engine'
+import type { PluginRepairActions } from './repair/plugin-repair-actions'
 
 export class AppController extends EventEmitter {
   private state: PersistedState = {
@@ -38,7 +39,8 @@ export class AppController extends EventEmitter {
     private readonly backups: BackupManager | null = null,
     private readonly externalInstallations: ExternalInstallationManager | null = null,
     private readonly applyNetworkPreferences: ((mode: ProxyMode, manualProxyUrl: string | null) => Promise<void>) | null = null,
-    private readonly repairEngine: StartupRepairEngine | null = null
+    private readonly repairEngine: StartupRepairEngine | null = null,
+    private readonly pluginRepairActions: PluginRepairActions | null = null
   ) {
     super()
     supervisor.on('status', () => { void this.emitSnapshot() })
@@ -263,6 +265,61 @@ export class AppController extends EventEmitter {
     await this.store.write(this.state)
     this.error = null
     return await this.emitSnapshot()
+  }
+
+  async keepQuarantinedPlugin(entryId: string): Promise<AppSnapshot> {
+    if (!this.pluginRepairActions) throw new Error('插件修复操作不可用')
+    try {
+      const record = await this.pluginRepairActions.keep(entryId)
+      if (this.repairSession?.quarantinedPlugin?.entryId === record.entryId) {
+        this.repairSession = { ...this.repairSession, quarantinedPlugin: record }
+      }
+      this.error = null
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : '保持插件禁用失败'
+      throw error
+    } finally {
+      await this.emitSnapshot()
+    }
+    return await this.snapshot()
+  }
+
+  async reenableQuarantinedPlugin(entryId: string): Promise<AppSnapshot> {
+    if (!this.pluginRepairActions) throw new Error('插件修复操作不可用')
+    if (!this.state.selectedVersion) throw new Error('当前没有可用 Harness 版本')
+    try {
+      const resolved = await this.resolveSelection(this.state.selectedVersion, this.state.selectedExternalId)
+      await this.pluginRepairActions.reenable(resolved, entryId)
+      if (this.repairSession?.quarantinedPlugin?.entryId === entryId) {
+        this.repairSession = { ...this.repairSession, phase: 'completed', outcome: 'not-needed', quarantinedPlugin: null }
+      }
+      this.error = null
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : '重新启用插件失败'
+      throw error
+    } finally {
+      await this.emitSnapshot()
+    }
+    return await this.snapshot()
+  }
+
+  async uninstallQuarantinedPlugin(entryId: string): Promise<AppSnapshot> {
+    if (!this.pluginRepairActions) throw new Error('插件修复操作不可用')
+    if (!this.state.selectedVersion) throw new Error('当前没有可用 Harness 版本')
+    try {
+      const resolved = await this.resolveSelection(this.state.selectedVersion, this.state.selectedExternalId)
+      await this.pluginRepairActions.uninstall(resolved, entryId)
+      if (this.repairSession?.quarantinedPlugin?.entryId === entryId) {
+        this.repairSession = { ...this.repairSession, phase: 'completed', outcome: 'not-needed', quarantinedPlugin: null }
+      }
+      this.error = null
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : '卸载冲突插件失败'
+      throw error
+    } finally {
+      await this.emitSnapshot()
+    }
+    return await this.snapshot()
   }
 
   isRuntimeActive(): boolean {

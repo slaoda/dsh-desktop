@@ -90,6 +90,8 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
   async launch(dsh: ResolvedDsh, mode: RepairMode): Promise<RepairLaunchResult> {
     let session = this.publish(newSession())
     const initialOverlay = await this.dependencies.quarantine.overlayPath()
+    const existingQuarantine = (await this.dependencies.quarantine.list())[0] ?? null
+    if (existingQuarantine) session = this.publish({ ...session, quarantinedPlugin: existingQuarantine })
     let inspection: DshPreflightResult | null = null
     let failure: unknown
     try {

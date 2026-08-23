@@ -19,6 +19,7 @@ import { PluginQuarantineStore } from './repair/plugin-quarantine'
 import { RepairBaselineStore } from './repair/repair-baseline'
 import { RepairEngine } from './repair/repair-engine'
 import { RepairTransactionStore } from './repair/repair-transaction'
+import { createOfficialPluginUninstaller, PluginRepairActions } from './repair/plugin-repair-actions'
 import { mainCopy, normalizeSystemLocale } from './copy'
 import { registerIpc } from './ipc'
 import { DshUpdatePopover, hasDshUpdate } from './dsh-update-popover'
@@ -308,21 +309,34 @@ app.whenReady().then(async () => {
   const runtimePathEntries = [runtime.commandDir, path.dirname(runtime.node)]
   const supervisor = new DshSupervisor(runtime.node, runtimePathEntries)
   const quarantine = new PluginQuarantineStore(app.getPath('userData'))
+  const repairTransactions = new RepairTransactionStore(app.getPath('userData'))
+  const preflight = new DshPreflight(runtime.node, runtimePathEntries, path.join(app.getPath('userData'), 'repair'))
   const repairEngine = harnessHome && backupManager
     ? new RepairEngine({
         supervisor,
-        preflight: new DshPreflight(runtime.node, runtimePathEntries, path.join(app.getPath('userData'), 'repair')),
+        preflight,
         baselines: new RepairBaselineStore(app.getPath('userData'), harnessHome),
         quarantine,
-        transactions: new RepairTransactionStore(app.getPath('userData')),
+        transactions: repairTransactions,
         backups: backupManager,
         managedVersions: versions
+      })
+    : null
+  const pluginRepairActions = harnessHome
+    ? new PluginRepairActions({
+        quarantine,
+        transactions: repairTransactions,
+        preflight,
+        supervisor,
+        backups: backupManager,
+        harnessHome,
+        uninstallPackage: createOfficialPluginUninstaller(runtime.node, runtimePathEntries)
       })
     : null
   const currentAppVersion = app.getVersion()
   controller = new AppController(
     currentAppVersion, store, new DshRegistry(net.fetch as typeof fetch), versions, supervisor, runtime,
-    normalizeSystemLocale(app.getLocale()), undefined, backupManager, externalInstallations, applyProxyPreferences, repairEngine
+    normalizeSystemLocale(app.getLocale()), undefined, backupManager, externalInstallations, applyProxyPreferences, repairEngine, pluginRepairActions
   )
   controller.on('snapshot', (snapshot: AppSnapshot) => {
     latestSnapshotForWindowTitle = snapshot
