@@ -10,11 +10,16 @@ async function fixture(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'dsh-prune-'))
   temporaryDirectories.push(root)
   const prebuilds = path.join(root, 'node_modules', 'node-pty', 'prebuilds')
-  for (const name of ['darwin-arm64', 'darwin-x64', 'win32-arm64', 'win32-x64', 'future-platform']) {
+  for (const name of ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-arm64', 'win32-x64', 'future-platform']) {
     await mkdir(path.join(prebuilds, name), { recursive: true })
     await writeFile(path.join(prebuilds, name, 'pty.node'), name)
   }
   await writeFile(path.join(prebuilds, 'win32-x64', 'pty.pdb'), 'debug symbols')
+  const conpty = path.join(root, 'node_modules', 'node-pty', 'third_party', 'conpty', '1.0.0')
+  await mkdir(path.join(conpty, 'win10-arm64'), { recursive: true })
+  await mkdir(path.join(conpty, 'win10-x64'), { recursive: true })
+  await writeFile(path.join(conpty, 'win10-arm64', 'OpenConsole.exe'), 'arm64')
+  await writeFile(path.join(conpty, 'win10-x64', 'OpenConsole.exe'), 'x64')
   return root
 }
 
@@ -27,9 +32,11 @@ describe('bundled release resource pruning', () => {
     const root = await fixture()
     const result = await pruneBundledResources(root)
 
-    expect(result.removedPrebuilds).toEqual(['darwin-arm64', 'darwin-x64', 'win32-arm64'])
+    expect(result.removedPrebuilds).toEqual(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-arm64'])
     expect(await readFile(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'win32-x64', 'pty.node'), 'utf8')).toBe('win32-x64')
     expect(await readFile(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'future-platform', 'pty.node'), 'utf8')).toBe('future-platform')
+    await expect(readFile(path.join(root, 'node_modules', 'node-pty', 'third_party', 'conpty', '1.0.0', 'win10-arm64', 'OpenConsole.exe'))).rejects.toThrow()
+    expect(await readFile(path.join(root, 'node_modules', 'node-pty', 'third_party', 'conpty', '1.0.0', 'win10-x64', 'OpenConsole.exe'), 'utf8')).toBe('x64')
     expect(result.removedFiles).toBeGreaterThan(3)
     await expect(readFile(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'win32-x64', 'pty.pdb'))).rejects.toThrow()
   })

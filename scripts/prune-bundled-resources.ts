@@ -7,8 +7,12 @@ export interface PruneResult {
   removedPrebuilds: string[]
 }
 
-const knownNodePtyPrebuild = /^(darwin|win32)-(arm64|x64)$/
+const knownNodePtyPrebuild = /^(darwin|linux|win32)-(arm64|x64)$/
 const windowsPrebuild = 'win32-x64'
+
+function isMissing(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+}
 
 async function measure(target: string): Promise<{ bytes: number; files: number }> {
   const info = await lstat(target)
@@ -38,6 +42,33 @@ async function removeDebugSymbols(target: string): Promise<{ bytes: number; file
       await rm(child)
       bytes += info.size
       files += 1
+    }
+  }
+  return { bytes, files }
+}
+
+async function removeArm64Conpty(dshRoot: string): Promise<{ bytes: number; files: number }> {
+  const conptyRoot = path.join(dshRoot, 'node_modules', 'node-pty', 'third_party', 'conpty')
+  let versions
+  try {
+    versions = await readdir(conptyRoot, { withFileTypes: true })
+  } catch (error) {
+    if (isMissing(error)) return { bytes: 0, files: 0 }
+    throw error
+  }
+
+  let bytes = 0
+  let files = 0
+  for (const version of versions) {
+    if (!version.isDirectory()) continue
+    const target = path.join(conptyRoot, version.name, 'win10-arm64')
+    try {
+      const measured = await measure(target)
+      await rm(target, { recursive: true, force: true })
+      bytes += measured.bytes
+      files += measured.files
+    } catch (error) {
+      if (!isMissing(error)) throw error
     }
   }
   return { bytes, files }
@@ -73,6 +104,10 @@ export async function pruneBundledResources(
   const symbols = await removeDebugSymbols(dshRoot)
   removedBytes += symbols.bytes
   removedFiles += symbols.files
+
+  const arm64Conpty = await removeArm64Conpty(dshRoot)
+  removedBytes += arm64Conpty.bytes
+  removedFiles += arm64Conpty.files
 
   return { removedBytes, removedFiles, removedPrebuilds: removedPrebuilds.sort() }
 }
