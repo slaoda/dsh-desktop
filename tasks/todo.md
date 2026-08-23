@@ -11,12 +11,12 @@
 - [x] Selective restore supports configuration-only and sessions.
 - [x] Existing installations are detected and ownership-classified.
 - [x] Project-local installations are read-only.
-- [ ] Running versions cannot be uninstalled.
-- [ ] GUI exposes the supported flows in Simplified Chinese and English.
+- [x] Running versions cannot be uninstalled.
+- [x] GUI exposes the supported flows in Simplified Chinese and English.
 - [x] Diagnostic logs are rotated, redacted, and openable from the GUI.
-- [ ] Windows installer allows a custom application directory.
-- [ ] Tray/start-at-login behavior works on Windows 11.
-- [ ] `npm run verify` passes.
-- [ ] Official Harness smoke test passes.
-- [ ] Windows x64 installer builds and packaged smoke test passes.
-- [ ] Final code/security review has no unresolved high-severity findings.
+- [x] Windows installer allows a custom application directory.
+- [x] Tray/start-at-login behavior works on Windows 11.
+- [x] `npm run verify` passes.
+- [x] Official Harness smoke test passes.
+- [x] Windows x64 installer builds and packaged smoke test passes.
+- [x] Final code/security review has no unresolved high-severity findings.
