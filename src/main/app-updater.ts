@@ -24,7 +24,7 @@ export class DesktopUpdater extends EventEmitter {
       delivery,
       status: supported ? 'idle' : 'unsupported',
       percent: null,
-      message: supported ? null : '开发模式不检查应用更新'
+      message: supported ? null : '此构建未配置可信的应用更新源'
     }
     updater.autoDownload = false
     updater.autoInstallOnAppQuit = false

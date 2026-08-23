@@ -6,6 +6,20 @@ This file records notable changes to DSH Desktop. Versions follow [Semantic Vers
 
 ## Unreleased
 
+## [0.3.0] - 2026-08-24
+
+### Added
+
+- Added stable, preview, and complete official Harness version channels, exact-version install/switch/remove, custom registry selection, and disk-space preflight.
+- Added verified discovery and in-place management of eligible existing Harness installations, while keeping project-local installs read-only.
+- Added credential-safe three-generation backups, selective configuration/session restore, transactional health-checked switching, crash recovery, and automatic rollback.
+- Added Windows tray behavior, optional start-at-login, custom installation directory support, manual or system proxy settings, and redacted rotating diagnostics.
+
+### Changed
+
+- Updated the bundled official Harness to `0.1.1-rc.2` and its boot-protocol smoke coverage.
+- Disabled the inherited desktop self-update feed until a manager-owned trusted release repository is configured; Harness updates remain available.
+
 ## [0.2.5] - 2026-08-23
 
 ### Fixed

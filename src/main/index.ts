@@ -625,7 +625,10 @@ app.whenReady().then(async () => {
   }
   const supervisor = new DshSupervisor(runtime.node, [runtime.commandDir, path.dirname(runtime.node)])
   const currentAppVersion = TEST_CURRENT_VERSION && semver.valid(TEST_CURRENT_VERSION) ? TEST_CURRENT_VERSION : app.getVersion()
-  const updateSupported = app.isPackaged || TEST_ENABLE_UPDATE === '1'
+  // This fork must not consume the base project's release feed: a future
+  // upstream desktop update could silently replace the Windows manager.
+  // Re-enable only after a manager-owned, signed release feed is configured.
+  const updateSupported = TEST_ENABLE_UPDATE === '1'
   controller = new AppController(
     currentAppVersion, store, new DshRegistry(net.fetch as typeof fetch), versions, supervisor, runtime,
     normalizeSystemLocale(app.getLocale()), undefined, backupManager, externalInstallations, applyProxyPreferences
