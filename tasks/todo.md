@@ -33,9 +33,9 @@
 **说明：** 保存允许范围内的插件/Profile 元数据和哈希，用于定位成功启动后的唯一变化。
 
 **验收：**
-- [ ] 只对白名单 Profile/配置文件采集元数据和 SHA-256。
-- [ ] `.env`、credentials、sessions、密钥和未知路径不会被读取或记录。
-- [ ] 损坏或旧 schema 基线安全忽略，不阻止启动。
+- [x] 只对白名单 Profile/配置文件采集元数据和 SHA-256。
+- [x] `.env`、credentials、sessions、密钥和未知路径不会被读取或记录。
+- [x] 损坏或旧 schema 基线安全忽略，不阻止启动。
 
 **验证：** `npm test -- tests/repair-baseline.test.ts`。
 **依赖：** 任务 2。
