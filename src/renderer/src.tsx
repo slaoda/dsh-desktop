@@ -10,7 +10,7 @@ import './style.css'
 
 const initialLocale: AppLocale = navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US'
 const empty: AppSnapshot = {
-  appVersion: '0.1.0', nodeVersion: null, latestVersion: null, selectedVersion: null,
+  appVersion: '0.2.0', nodeVersion: null, latestVersion: null, selectedVersion: null,
   locale: initialLocale, localePreference: 'system', releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org',
   harnessHome: null, backups: [], externalInstallations: [], selectedExternalId: null,
   closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null, repairMode: 'auto',
