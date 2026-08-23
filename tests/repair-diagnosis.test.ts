@@ -102,6 +102,15 @@ describe('diagnoseStartupFailure', () => {
     })
   })
 
+  it('托管包清单身份或 bin 校验失败时也只建议原版本重装', () => {
+    for (const message of ['官方 DSH 包身份或版本校验失败', '官方 DSH 包未提供 dsh CLI 入口']) {
+      expect(diagnoseStartupFailure({ message, source: 'installed', version: '0.1.0-rc.8' })).toMatchObject({
+        category: 'managed-install-corrupt', confidence: 'high',
+        action: { kind: 'reinstall-managed-version', version: '0.1.0-rc.8' }
+      })
+    }
+  })
+
   it('未知错误保持低置信度且不修复', () => {
     const diagnosis = diagnoseStartupFailure({ message: 'something unexpected happened', source: 'installed', version: '0.1.0-rc.8' })
     expect(diagnosis).toMatchObject({ category: 'unknown', confidence: 'low', action: null })

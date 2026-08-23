@@ -76,7 +76,7 @@ function diagnoseManagedFailure(message: string, version: string): RepairDiagnos
     }
   }
 
-  if (/官方 DSH CLI 入口无效|DSH CLI entry is invalid|ENOENT[^\n]*(?:dsh|cli)|找不到[^\n]*(?:DSH|CLI)[^\n]*入口/i.test(safeMessage)) {
+  if (/官方 DSH (?:包身份或版本校验失败|包未提供 dsh CLI 入口|CLI 入口无效)|DSH CLI entry is invalid|ENOENT[^\n]*(?:dsh|cli)|找不到[^\n]*(?:DSH|CLI)[^\n]*入口/i.test(safeMessage)) {
     const parsedVersion = exactVersionSchema.safeParse(version)
     return {
       category: 'managed-install-corrupt', confidence: parsedVersion.success ? 'high' : 'low',

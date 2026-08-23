@@ -74,6 +74,15 @@ describe('VersionManager exact-version repair', () => {
     await expect(manager.resolve('1.2.3')).rejects.toThrow('CLI 入口无效')
   })
 
+  it('损坏的官方包清单返回稳定的托管安装校验错误', async () => {
+    const { manager, entry } = await installedManager()
+    const manifest = path.join(path.dirname(entry), 'package.json')
+    await writeFile(manifest, '{ invalid json')
+
+    await expect(manager.resolve('1.2.3')).rejects.toThrow('包身份或版本校验失败')
+    expect(await manager.list()).toContainEqual({ version: '1.2.3', source: 'installed' })
+  })
+
   it('下载或安装候选失败时不交换原目录', async () => {
     const { manager, entry } = await installedManager()
     process.env.FAKE_PNPM_FAIL = '1'

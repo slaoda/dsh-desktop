@@ -16,7 +16,7 @@ import {
   repairModeSchema
 } from '../shared/contracts'
 import type { AppController } from './controller'
-import type { DiagnosticLogger } from './diagnostic-logger'
+import { redactDiagnostic, type DiagnosticLogger } from './diagnostic-logger'
 
 type ManagerGuard = (event: IpcMainInvokeEvent) => void
 type OpenHarnessWindow = (url: string) => Promise<void>
@@ -78,7 +78,7 @@ export function registerIpc(
   })
   ipcMain.handle(channels.copyText, (event, raw: unknown) => {
     assertManager(event)
-    clipboard.writeText(clipboardTextSchema.parse(raw))
+    clipboard.writeText(redactDiagnostic(clipboardTextSchema.parse(raw)))
   })
   ipcMain.handle(channels.setLocale, async (event, raw: unknown) => {
     assertManager(event)

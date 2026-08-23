@@ -169,6 +169,9 @@ export class RepairBaselineStore {
 }
 
 export function findUniquePluginChange(previous: RepairBaseline, current: RepairBaseline): PluginBaselineEntry | null {
+  if (previous.version !== current.version || previous.source !== current.source) return null
+  if (JSON.stringify(previous.files.profilePatch) !== JSON.stringify(current.files.profilePatch)) return null
+  if (JSON.stringify(previous.files.homePatch) !== JSON.stringify(current.files.homePatch)) return null
   const previousEntries = new Map(previous.profile.entries.map((item) => [item.entryId, item.packageName]))
   const changedPackages = new Set(Object.entries(current.profile.dependencies)
     .filter(([name, version]) => previous.profile.dependencies[name] !== version)
@@ -179,5 +182,17 @@ export function findUniquePluginChange(previous: RepairBaseline, current: Repair
       candidates.set(`${entry.entryId}\0${entry.packageName}`, entry)
     }
   }
-  return candidates.size === 1 ? [...candidates.values()][0] : null
+  if (candidates.size !== 1) return null
+  const candidate = [...candidates.values()][0]
+  const remainingDependencies = (dependencies: Record<string, string>): Array<[string, string]> => Object.entries(dependencies)
+    .filter(([name]) => name !== candidate.packageName)
+    .sort(([left], [right]) => left.localeCompare(right))
+  const remainingEntries = (entries: PluginBaselineEntry[]): PluginBaselineEntry[] => entries
+    .filter((entry) => entry.entryId !== candidate.entryId)
+    .sort((left, right) => left.entryId.localeCompare(right.entryId) || left.packageName.localeCompare(right.packageName))
+  const remainingBundles = (bundles: string[]): string[] => bundles.filter((name) => name !== candidate.packageName)
+  if (JSON.stringify(remainingDependencies(previous.profile.dependencies)) !== JSON.stringify(remainingDependencies(current.profile.dependencies))) return null
+  if (JSON.stringify(remainingEntries(previous.profile.entries)) !== JSON.stringify(remainingEntries(current.profile.entries))) return null
+  if (JSON.stringify(remainingBundles(previous.profile.bundles)) !== JSON.stringify(remainingBundles(current.profile.bundles))) return null
+  return candidate
 }

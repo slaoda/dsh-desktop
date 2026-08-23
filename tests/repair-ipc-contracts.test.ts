@@ -53,4 +53,15 @@ describe('repair IPC contracts', () => {
     expect(controller.confirmStartupRepair).toHaveBeenCalledOnce()
     expect(openHarnessWindow).toHaveBeenCalledWith('http://127.0.0.1:1234')
   })
+
+  it('主进程在写入剪贴板前再次脱敏', async () => {
+    registerIpc({} as never, vi.fn(), vi.fn(), { log: vi.fn(), directory: 'logs' } as never)
+    await electron.handlers.get(channels.copyText)?.({}, 'API_KEY=sk-never-copy proxy=https://alice:secret@example.test')
+
+    expect(electron.clipboard.writeText).toHaveBeenCalledOnce()
+    const copied = electron.clipboard.writeText.mock.calls[0][0] as string
+    expect(copied).toContain('[REDACTED]')
+    expect(copied).not.toContain('sk-never-copy')
+    expect(copied).not.toContain('secret')
+  })
 })

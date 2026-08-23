@@ -90,6 +90,33 @@ describe('RepairEngine', () => {
     expect(await fixture.baselines.read()).toMatchObject({ version: '0.1.0-rc.8' })
   })
 
+  it('询问模式确认后直接执行已验证动作，不重复未修复启动', async () => {
+    const fixture = await createFixture()
+    let starts = 0
+    const engine = new RepairEngine({
+      supervisor: {
+        start: async () => {
+          starts += 1
+          if (starts === 1) throw new Error('Error: duplicate entry id "github-tools" from @example/dsh-github')
+          return 'http://127.0.0.1:43123'
+        }
+      },
+      preflight: passingPreflight(), baselines: fixture.baselines,
+      quarantine: fixture.quarantine, transactions: fixture.transactions,
+      backups: { hasSource: async () => true, create: async () => undefined }
+    })
+    let awaiting: RepairLaunchError | null = null
+    try { await engine.launch(fixture.dsh, 'ask') } catch (error) { awaiting = error as RepairLaunchError }
+
+    expect(awaiting?.session).toMatchObject({ phase: 'awaiting-confirmation', repairAttempts: 0, retryAttempts: 0 })
+    expect(starts).toBe(1)
+    const result = await engine.confirmPendingRepair(awaiting!.session.id, fixture.dsh.version)
+
+    expect(result.session).toMatchObject({ phase: 'recovered', repairAttempts: 1, retryAttempts: 1 })
+    expect(starts).toBe(2)
+    await expect(engine.confirmPendingRepair(awaiting!.session.id, fixture.dsh.version)).rejects.toThrow('不再有效')
+  })
+
   it('修复后重试仍失败时回滚隔离并停止', async () => {
     const fixture = await createFixture()
     let starts = 0
@@ -132,6 +159,49 @@ describe('RepairEngine', () => {
       session: { phase: 'failed', diagnosis: { category: 'unknown' }, repairAttempts: 0, retryAttempts: 0 }
     })
     expect(starts).toBe(1)
+    expect(backups).toBe(0)
+    expect(await fixture.quarantine.list()).toEqual([])
+  })
+
+  it('日志中的 entry id 不在官方配置转储中时拒绝自动隔离', async () => {
+    const fixture = await createFixture()
+    let starts = 0
+    let backups = 0
+    const engine = new RepairEngine({
+      supervisor: { start: async () => { starts += 1; throw new Error('Error: duplicate entry id "unverified-plugin" from @example/unverified') } },
+      preflight: passingPreflight(), baselines: fixture.baselines,
+      quarantine: fixture.quarantine, transactions: fixture.transactions,
+      backups: { hasSource: async () => true, create: async () => { backups += 1 } }
+    })
+
+    await expect(engine.launch(fixture.dsh, 'auto')).rejects.toMatchObject({
+      session: {
+        diagnosis: { category: 'plugin-conflict', confidence: 'medium', action: null },
+        repairAttempts: 0, retryAttempts: 0
+      }
+    })
+    expect(starts).toBe(1)
+    expect(backups).toBe(0)
+    expect(await fixture.quarantine.list()).toEqual([])
+  })
+
+  it('不会用其他 Harness 版本的成功基线推断自动隔离目标', async () => {
+    const fixture = await createFixture()
+    await fixture.baselines.capture({
+      version: '0.1.0-rc.7', source: 'installed', effectiveConfig: '- id: old-tools',
+      entries: [{ entryId: 'old-tools', packageName: '@example/dsh-github' }]
+    })
+    let backups = 0
+    const engine = new RepairEngine({
+      supervisor: { start: async () => { throw new Error('Error: plugin tree failed to load') } },
+      preflight: passingPreflight(), baselines: fixture.baselines,
+      quarantine: fixture.quarantine, transactions: fixture.transactions,
+      backups: { hasSource: async () => true, create: async () => { backups += 1 } }
+    })
+
+    await expect(engine.launch(fixture.dsh, 'auto')).rejects.toMatchObject({
+      session: { diagnosis: { confidence: 'medium', action: null }, repairAttempts: 0, retryAttempts: 0 }
+    })
     expect(backups).toBe(0)
     expect(await fixture.quarantine.list()).toEqual([])
   })
@@ -204,6 +274,35 @@ describe('RepairEngine', () => {
     expect(startedVersion).toBe('0.1.0-rc.8')
     expect(commits).toBe(1)
     expect(rollbacks).toBe(0)
+  })
+
+  it('托管版本重装在询问模式确认前不会开始下载', async () => {
+    const fixture = await createFixture()
+    let repairs = 0
+    const engine = new RepairEngine({
+      supervisor: { start: async () => 'http://127.0.0.1:43123' },
+      preflight: passingPreflight(), baselines: fixture.baselines,
+      quarantine: fixture.quarantine, transactions: fixture.transactions,
+      backups: { hasSource: async () => true, create: async () => undefined },
+      managedVersions: {
+        beginRepair: async () => {
+          repairs += 1
+          return { candidate: fixture.dsh, commit: async () => undefined, rollback: async () => undefined }
+        }
+      }
+    })
+    let awaiting: RepairLaunchError | null = null
+    try {
+      await engine.repairManagedVersion('0.1.0-rc.8', new Error('官方 DSH CLI 入口无效'), 'ask', 'https://registry.npmjs.org')
+    } catch (error) {
+      awaiting = error as RepairLaunchError
+    }
+
+    expect(awaiting?.session.phase).toBe('awaiting-confirmation')
+    expect(repairs).toBe(0)
+    const result = await engine.confirmPendingRepair(awaiting!.session.id, '0.1.0-rc.8')
+    expect(result.session).toMatchObject({ phase: 'recovered', repairAttempts: 1, retryAttempts: 1 })
+    expect(repairs).toBe(1)
   })
 
   it('重装候选版本启动失败时恢复旧程序目录', async () => {

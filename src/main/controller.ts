@@ -151,10 +151,21 @@ export class AppController extends EventEmitter {
 
   async confirmStartupRepair(): Promise<AppSnapshot> {
     const action = this.repairSession?.diagnosis?.action
-    if (this.repairSession?.phase !== 'awaiting-confirmation' || (action?.kind !== 'quarantine-plugin' && action?.kind !== 'reinstall-managed-version')) {
+    if (!this.repairEngine || !this.state.selectedVersion || this.state.selectedExternalId || this.repairSession?.phase !== 'awaiting-confirmation' || (action?.kind !== 'quarantine-plugin' && action?.kind !== 'reinstall-managed-version')) {
       throw new Error('当前没有等待确认的启动修复')
     }
-    return await this.launchWithRepairMode('auto')
+    try {
+      const result = await this.repairEngine.confirmPendingRepair(this.repairSession.id, this.state.selectedVersion)
+      this.repairSession = result.session
+      this.error = null
+    } catch (error) {
+      if (error instanceof RepairLaunchError) this.repairSession = error.session
+      this.error = error instanceof Error ? error.message : '启动修复失败'
+      throw error
+    } finally {
+      await this.emitSnapshot()
+    }
+    return await this.snapshot()
   }
 
   private async launchWithRepairMode(mode: RepairMode): Promise<AppSnapshot> {

@@ -58,6 +58,7 @@ export interface StartupRepairEngine {
   recoverInterrupted(): Promise<boolean>
   launch(dsh: ResolvedDsh, mode: RepairMode): Promise<RepairLaunchResult>
   repairManagedVersion(version: string, failure: unknown, mode: RepairMode, registryUrl: string): Promise<RepairLaunchResult>
+  confirmPendingRepair(repairId: string, version: string): Promise<RepairLaunchResult>
 }
 
 export class RepairLaunchError extends Error {
@@ -78,7 +79,27 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '启动失败'
 }
 
+type PendingRepair =
+  | {
+      kind: 'plugin'
+      session: RepairSessionSummary
+      dsh: ResolvedDsh
+      inspection: DshPreflightResult | null
+      diagnosis: RepairDiagnosis
+      failure: unknown
+    }
+  | {
+      kind: 'managed-version'
+      session: RepairSessionSummary
+      version: string
+      diagnosis: RepairDiagnosis
+      failure: unknown
+      registryUrl: string
+    }
+
 export class RepairEngine extends EventEmitter implements StartupRepairEngine {
+  private pendingRepair: PendingRepair | null = null
+
   constructor(private readonly dependencies: RepairEngineDependencies) {
     super()
   }
@@ -88,6 +109,7 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
   }
 
   async launch(dsh: ResolvedDsh, mode: RepairMode): Promise<RepairLaunchResult> {
+    this.pendingRepair = null
     let session = this.publish(newSession())
     const initialOverlay = await this.dependencies.quarantine.overlayPath()
     const existingQuarantine = (await this.dependencies.quarantine.list())[0] ?? null
@@ -107,6 +129,7 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
 
     session = this.publish({ ...session, phase: 'diagnosing' })
     let diagnosis = diagnoseStartupFailure({ message: errorMessage(failure), source: dsh.source, version: dsh.version })
+    diagnosis = this.verifyConfiguredPluginCandidate(diagnosis, inspection)
     diagnosis = await this.resolveBaselineCandidate(diagnosis, dsh, inspection)
     session = this.publish({ ...session, diagnosis })
 
@@ -117,6 +140,9 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
         phase: awaiting ? 'awaiting-confirmation' : 'failed',
         outcome: awaiting ? 'awaiting-confirmation' : 'failed'
       })
+      if (mode === 'ask' && diagnosis.action?.kind === 'quarantine-plugin') {
+        this.pendingRepair = { kind: 'plugin', session, dsh, inspection, diagnosis, failure }
+      }
       throw new RepairLaunchError(`${diagnosis.summary} ${diagnosis.evidence[0] ?? ''}`.trim(), session, { cause: failure })
     }
 
@@ -134,6 +160,7 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
     mode: RepairMode,
     registryUrl: string
   ): Promise<RepairLaunchResult> {
+    this.pendingRepair = null
     let session = this.publish({ ...newSession(), phase: 'diagnosing' })
     const diagnosis = diagnoseStartupFailure({ message: errorMessage(failure), source: 'installed', version })
     session = this.publish({ ...session, diagnosis })
@@ -144,8 +171,38 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
         phase: awaiting ? 'awaiting-confirmation' : 'failed',
         outcome: awaiting ? 'awaiting-confirmation' : 'failed'
       })
+      if (awaiting && diagnosis.action?.kind === 'reinstall-managed-version') {
+        this.pendingRepair = { kind: 'managed-version', session, version, diagnosis, failure, registryUrl }
+      }
       throw new RepairLaunchError(diagnosis.summary, session, { cause: failure })
     }
+    return await this.repairManagedVersionAction(version, failure, registryUrl, diagnosis, session)
+  }
+
+  async confirmPendingRepair(repairId: string, version: string): Promise<RepairLaunchResult> {
+    const pending = this.pendingRepair
+    this.pendingRepair = null
+    if (!pending || pending.session.id !== repairId || (pending.kind === 'plugin' ? pending.dsh.version : pending.version) !== version) {
+      throw new Error('待确认的启动修复已不再有效')
+    }
+    if (pending.kind === 'plugin') {
+      return await this.quarantineAndRetry(
+        pending.dsh, pending.inspection, pending.diagnosis, pending.session, pending.failure
+      )
+    }
+    return await this.repairManagedVersionAction(
+      pending.version, pending.failure, pending.registryUrl, pending.diagnosis, pending.session
+    )
+  }
+
+  private async repairManagedVersionAction(
+    version: string,
+    failure: unknown,
+    registryUrl: string,
+    diagnosis: RepairDiagnosis,
+    initialSession: RepairSessionSummary
+  ): Promise<RepairLaunchResult> {
+    let session = initialSession
     if (!this.dependencies.managedVersions) {
       session = this.publish({ ...session, phase: 'failed', outcome: 'failed' })
       throw new RepairLaunchError('托管版本修复器不可用', session, { cause: failure })
@@ -258,7 +315,7 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
   ): Promise<RepairDiagnosis> {
     if (diagnosis.category !== 'plugin-conflict' || diagnosis.action || dsh.source === 'external' || inspection?.status !== 'passed' || inspection.effectiveConfig === null) return diagnosis
     const previous = await this.dependencies.baselines.read()
-    if (!previous) return diagnosis
+    if (!previous || previous.version !== dsh.version || previous.source !== dsh.source) return diagnosis
     try {
       const current = await this.dependencies.baselines.snapshot({
         version: dsh.version, source: dsh.source, effectiveConfig: inspection.effectiveConfig, entries: inspection.entries
@@ -277,6 +334,31 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
       }
     } catch {
       return diagnosis
+    }
+  }
+
+  private verifyConfiguredPluginCandidate(
+    diagnosis: RepairDiagnosis,
+    inspection: DshPreflightResult | null
+  ): RepairDiagnosis {
+    const action = diagnosis.action
+    if (action?.kind !== 'quarantine-plugin') return diagnosis
+    const matches = inspection?.status === 'passed'
+      ? inspection.entries.filter((entry) => entry.entryId === action.entryId)
+      : []
+    if (matches.length !== 1) {
+      return {
+        ...diagnosis,
+        confidence: 'medium',
+        summary: `日志指向插件条目 ${action.entryId}，但无法在本次官方配置转储中唯一确认。`,
+        action: null
+      }
+    }
+    const verified = matches[0]
+    return {
+      ...diagnosis,
+      candidate: verified,
+      action: { ...action, packageName: verified.packageName }
     }
   }
 

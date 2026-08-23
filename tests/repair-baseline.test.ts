@@ -114,5 +114,17 @@ describe('findUniquePluginChange', () => {
     expect(findUniquePluginChange(previous, { ...current, profile: { ...current.profile, entries: [
       ...current.profile.entries, { entryId: 'weather-tools', packageName: '@example/dsh-weather' }
     ] } })).toBeNull()
+    expect(findUniquePluginChange(previous, {
+      ...current,
+      files: { ...current.files, homePatch: { kind: 'missing' } }
+    })).toBeNull()
+    expect(findUniquePluginChange(previous, {
+      ...current,
+      profile: {
+        ...current.profile,
+        dependencies: { ...current.profile.dependencies, '@example/unrelated': '1.0.0' }
+      }
+    })).toBeNull()
+    expect(findUniquePluginChange(previous, { ...current, version: '0.1.0-rc.7' })).toBeNull()
   })
 })

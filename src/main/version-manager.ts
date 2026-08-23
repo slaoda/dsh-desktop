@@ -363,7 +363,12 @@ export class VersionManager {
 
   private async resolveAt(root: string, version: string, source: ResolvedDsh['source']): Promise<ResolvedDsh> {
     const packageRoot = path.join(root, 'node_modules', '@deepseek-ai', 'dsh')
-    const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8')) as PackageManifest
+    let manifest: PackageManifest
+    try {
+      manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8')) as PackageManifest
+    } catch (error) {
+      throw new Error('官方 DSH 包身份或版本校验失败', { cause: error })
+    }
     if (manifest.name !== officialPackageName || manifest.version !== version) throw new Error('官方 DSH 包身份或版本校验失败')
     const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.dsh
     if (!bin) throw new Error('官方 DSH 包未提供 dsh CLI 入口')

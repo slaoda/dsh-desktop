@@ -74,6 +74,7 @@ describe('AppController', () => {
         this.emit('session', session)
         return { url: await supervisor.start(dsh, { timeoutMs: 5_000, stabilityMs: 0 }), session }
       }
+      async confirmPendingRepair(): Promise<never> { throw new Error('not used') }
       async repairManagedVersion(): Promise<never> { throw new Error('not used') }
     }
     const engine = new FakeRepairEngine()
@@ -116,6 +117,7 @@ describe('AppController', () => {
       repairs = 0
       async recoverInterrupted(): Promise<boolean> { return false }
       async launch(): Promise<never> { throw new Error('损坏入口不应进入普通启动') }
+      async confirmPendingRepair(): Promise<never> { throw new Error('not used') }
       async repairManagedVersion(version: string, _failure: unknown, mode: 'auto' | 'ask' | 'diagnose', registryUrl: string) {
         this.repairs += 1
         expect({ version, mode, registryUrl }).toEqual({ version: '1.0.0', mode: 'auto', registryUrl: 'https://registry.npmjs.org' })
@@ -165,12 +167,13 @@ describe('AppController', () => {
     }
     class ConfirmRepairEngine extends EventEmitter implements StartupRepairEngine {
       modes: RepairMode[] = []
+      confirmations: string[] = []
       async recoverInterrupted(): Promise<boolean> { return false }
-      async launch(_dsh: typeof resolved, mode: RepairMode) {
+      async launch(_dsh: typeof resolved, mode: RepairMode): Promise<never> {
         this.modes.push(mode)
-        if (mode === 'ask') throw new RepairLaunchError('等待用户确认', awaiting)
-        return { url: 'http://127.0.0.1:23456', session: recovered }
+        throw new RepairLaunchError('等待用户确认', awaiting)
       }
+      async confirmPendingRepair(repairId: string, version: string) { this.confirmations.push(`${repairId}:${version}`); return { url: 'http://127.0.0.1:23456', session: recovered } }
       async repairManagedVersion(): Promise<never> { throw new Error('not used') }
     }
     const engine = new ConfirmRepairEngine()
@@ -185,7 +188,8 @@ describe('AppController', () => {
     await expect(controller.confirmStartupRepair()).rejects.toThrow('没有等待确认')
     await expect(controller.launch()).rejects.toThrow('等待用户确认')
     expect((await controller.confirmStartupRepair()).repairSession).toEqual(recovered)
-    expect(engine.modes).toEqual(['ask', 'auto'])
+    expect(engine.modes).toEqual(['ask'])
+    expect(engine.confirmations).toEqual([`${awaiting.id}:1.0.0`])
     expect((await store.read()).repairMode).toBe('ask')
   })
 
@@ -218,6 +222,7 @@ describe('AppController', () => {
         if (dsh.version === '1.1.0') throw new RepairLaunchError('候选版本失败', failed)
         return { url: 'http://127.0.0.1:34567', session: rollback }
       }
+      async confirmPendingRepair(): Promise<never> { throw new Error('not used') }
       async repairManagedVersion(): Promise<never> { throw new Error('not used') }
     }
     const engine = new SwitchRepairEngine()
@@ -254,6 +259,7 @@ describe('AppController', () => {
       launches: string[] = []
       async recoverInterrupted(): Promise<boolean> { return false }
       async launch(dsh: { version: string }) { this.launches.push(dsh.version); return { url: 'http://127.0.0.1:45678', session } }
+      async confirmPendingRepair(): Promise<never> { throw new Error('not used') }
       async repairManagedVersion(): Promise<never> { throw new Error('not used') }
     }
     const engine = new BackupRestartEngine()
