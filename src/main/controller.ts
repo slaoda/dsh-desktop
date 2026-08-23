@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, OfficialVersion, ProxyMode, ReleaseChannel } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, OfficialVersion, ProxyMode, ReleaseChannel, RepairSessionSummary } from '../shared/contracts'
 import { defaultRegistryUrl, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, proxyModeSchema, proxyUrlSchema, registryUrlSchema, releaseChannelSchema, resolveLocale } from '../shared/contracts'
 import { runProcess } from './process-utils'
 import { DshRegistry } from './registry'
@@ -12,6 +12,7 @@ import { DshSupervisor } from './dsh-supervisor'
 import { VersionManager, type ResolvedDsh } from './version-manager'
 import { BackupManager } from './backup-manager'
 import { ExternalInstallationManager } from './external-installations'
+import { RepairLaunchError, type StartupRepairEngine } from './repair/repair-engine'
 
 export class AppController extends EventEmitter {
   private state: PersistedState = {
@@ -22,6 +23,7 @@ export class AppController extends EventEmitter {
   private availableVersions: OfficialVersion[] = []
   private nodeVersion: string | null = null
   private error: string | null = null
+  private repairSession: RepairSessionSummary | null = null
   private versionOperationInProgress = false
 
   constructor(
@@ -35,15 +37,21 @@ export class AppController extends EventEmitter {
     private readonly switchTransactions: SwitchTransactionStore = new SwitchTransactionStore(path.dirname(store.file)),
     private readonly backups: BackupManager | null = null,
     private readonly externalInstallations: ExternalInstallationManager | null = null,
-    private readonly applyNetworkPreferences: ((mode: ProxyMode, manualProxyUrl: string | null) => Promise<void>) | null = null
+    private readonly applyNetworkPreferences: ((mode: ProxyMode, manualProxyUrl: string | null) => Promise<void>) | null = null,
+    private readonly repairEngine: StartupRepairEngine | null = null
   ) {
     super()
     supervisor.on('status', () => { void this.emitSnapshot() })
+    repairEngine?.on('session', (session) => {
+      this.repairSession = session
+      void this.emitSnapshot()
+    })
   }
 
   async initialize(): Promise<AppSnapshot> {
     this.state = await this.store.read()
     await this.versions.cleanupInterruptedInstalls()
+    if (await this.repairEngine?.recoverInterrupted()) this.error = '检测到未完成的启动修复，已恢复修复前状态'
     if (this.externalInstallations) {
       try { await this.externalInstallations.refresh() } catch (error) {
         this.error = error instanceof Error ? `检测既有 Harness 安装失败：${error.message}` : '检测既有 Harness 安装失败'
@@ -138,9 +146,16 @@ export class AppController extends EventEmitter {
     if (!this.state.selectedVersion) throw new Error('请先安装并选择一个 DSH 版本')
     try {
       const resolved = await this.resolveSelection(this.state.selectedVersion, this.state.selectedExternalId)
-      await this.supervisor.start(resolved)
+      if (this.repairEngine) {
+        const result = await this.repairEngine.launch(resolved, 'auto')
+        this.repairSession = result.session
+      } else {
+        await this.supervisor.start(resolved)
+        this.repairSession = null
+      }
       this.error = null
     } catch (error) {
+      if (error instanceof RepairLaunchError) this.repairSession = error.session
       this.error = error instanceof Error ? error.message : '启动失败'
       throw error
     } finally {
@@ -274,6 +289,7 @@ export class AppController extends EventEmitter {
       availableVersions,
       runtimeStatus: this.supervisor.status,
       runtimeUrl: this.supervisor.url,
+      repairSession: this.repairSession,
       error: this.error
     }
   }

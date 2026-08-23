@@ -13,7 +13,7 @@ const empty: AppSnapshot = {
   locale: initialLocale, localePreference: 'system', releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org',
   harnessHome: null, backups: [], externalInstallations: [], selectedExternalId: null,
   closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null,
-  dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
+  dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, repairSession: null, error: null
 }
 type VersionFilter = 'all' | 'installed' | 'available'
 interface VersionRow { version: string; publishedAt: string | null; source: 'bundled' | 'installed' | null; installed: boolean }

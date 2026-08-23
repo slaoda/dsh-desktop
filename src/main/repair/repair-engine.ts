@@ -43,6 +43,12 @@ export interface RepairLaunchResult {
   session: RepairSessionSummary
 }
 
+export interface StartupRepairEngine {
+  on(event: 'session', listener: (session: RepairSessionSummary) => void): this
+  recoverInterrupted(): Promise<boolean>
+  launch(dsh: ResolvedDsh, mode: RepairMode): Promise<RepairLaunchResult>
+}
+
 export class RepairLaunchError extends Error {
   constructor(message: string, readonly session: RepairSessionSummary, options?: ErrorOptions) {
     super(message, options)
@@ -61,7 +67,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '启动失败'
 }
 
-export class RepairEngine extends EventEmitter {
+export class RepairEngine extends EventEmitter implements StartupRepairEngine {
   constructor(private readonly dependencies: RepairEngineDependencies) {
     super()
   }

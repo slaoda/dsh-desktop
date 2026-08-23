@@ -14,6 +14,11 @@ import { BackupManager } from './backup-manager'
 import { resolveHarnessHome } from './harness-home'
 import { ExternalInstallationManager } from './external-installations'
 import { DiagnosticLogger } from './diagnostic-logger'
+import { DshPreflight } from './repair/dsh-preflight'
+import { PluginQuarantineStore } from './repair/plugin-quarantine'
+import { RepairBaselineStore } from './repair/repair-baseline'
+import { RepairEngine } from './repair/repair-engine'
+import { RepairTransactionStore } from './repair/repair-transaction'
 import { mainCopy, normalizeSystemLocale } from './copy'
 import { registerIpc } from './ipc'
 import { DshUpdatePopover, hasDshUpdate } from './dsh-update-popover'
@@ -293,16 +298,30 @@ app.whenReady().then(async () => {
   }
   const externalInstallations = new ExternalInstallationManager(runtime)
   let backupManager: BackupManager | null = null
+  let harnessHome: string | null = null
   try {
-    backupManager = new BackupManager(app.getPath('userData'), resolveHarnessHome(process.env, os.homedir()))
+    harnessHome = resolveHarnessHome(process.env, os.homedir())
+    backupManager = new BackupManager(app.getPath('userData'), harnessHome)
   } catch (error) {
     console.warn(error instanceof Error ? error.message : 'Harness 备份功能初始化失败')
   }
-  const supervisor = new DshSupervisor(runtime.node, [runtime.commandDir, path.dirname(runtime.node)])
+  const runtimePathEntries = [runtime.commandDir, path.dirname(runtime.node)]
+  const supervisor = new DshSupervisor(runtime.node, runtimePathEntries)
+  const quarantine = new PluginQuarantineStore(app.getPath('userData'))
+  const repairEngine = harnessHome && backupManager
+    ? new RepairEngine({
+        supervisor,
+        preflight: new DshPreflight(runtime.node, runtimePathEntries, path.join(app.getPath('userData'), 'repair')),
+        baselines: new RepairBaselineStore(app.getPath('userData'), harnessHome),
+        quarantine,
+        transactions: new RepairTransactionStore(app.getPath('userData')),
+        backups: backupManager
+      })
+    : null
   const currentAppVersion = app.getVersion()
   controller = new AppController(
     currentAppVersion, store, new DshRegistry(net.fetch as typeof fetch), versions, supervisor, runtime,
-    normalizeSystemLocale(app.getLocale()), undefined, backupManager, externalInstallations, applyProxyPreferences
+    normalizeSystemLocale(app.getLocale()), undefined, backupManager, externalInstallations, applyProxyPreferences, repairEngine
   )
   controller.on('snapshot', (snapshot: AppSnapshot) => {
     latestSnapshotForWindowTitle = snapshot

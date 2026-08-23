@@ -183,6 +183,7 @@ export interface AppSnapshot {
   availableVersions: OfficialVersion[]
   runtimeStatus: RuntimeStatus
   runtimeUrl: string | null
+  repairSession: RepairSessionSummary | null
   error: string | null
 }
 
