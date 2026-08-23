@@ -68,7 +68,7 @@ export class BackupManager {
   }
 
   async create(reason: BackupReason, scope: BackupScope): Promise<BackupSummary> {
-    if (!['manual', 'update', 'pre-restore'].includes(reason)) throw new Error('备份原因无效')
+    if (!['manual', 'update', 'pre-restore', 'pre-repair'].includes(reason)) throw new Error('备份原因无效')
     if (!['configuration', 'full'].includes(scope)) throw new Error('备份范围无效')
     const home = await lstat(this.harnessHome)
     if (!home.isDirectory() || home.isSymbolicLink()) throw new Error('Harness 主目录无效或为符号链接')
@@ -200,7 +200,7 @@ export class BackupManager {
     if (!backupIdPattern.test(id)) throw new Error('备份标识无效')
     const parsed = JSON.parse(await readFile(path.join(this.backupsDir, id, 'manifest.json'), 'utf8')) as Partial<BackupManifest>
     if (parsed.schemaVersion !== 1 || parsed.id !== id || typeof parsed.createdAt !== 'string') throw new Error('备份清单无效')
-    if (!['manual', 'update', 'pre-restore'].includes(parsed.reason ?? '')) throw new Error('备份清单无效')
+    if (!['manual', 'update', 'pre-restore', 'pre-repair'].includes(parsed.reason ?? '')) throw new Error('备份清单无效')
     if (!['configuration', 'full'].includes(parsed.scope ?? '')) throw new Error('备份清单无效')
     if (!Array.isArray(parsed.files)) throw new Error('备份清单无效')
     const files = parsed.files.map((item) => {

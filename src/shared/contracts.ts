@@ -43,7 +43,7 @@ export type AppLocale = 'zh-CN' | 'en-US'
 export type LocalePreference = z.infer<typeof localePreferenceSchema>
 export type ReleaseChannel = z.infer<typeof releaseChannelSchema>
 export type BackupScope = z.infer<typeof backupScopeSchema>
-export type BackupReason = 'manual' | 'update' | 'pre-restore'
+export type BackupReason = 'manual' | 'update' | 'pre-restore' | 'pre-repair'
 export type ProxyMode = z.infer<typeof proxyModeSchema>
 export type RepairMode = z.infer<typeof repairModeSchema>
 
@@ -94,6 +94,34 @@ export interface RepairDiagnosis {
   evidence: string[]
   candidate: RepairCandidate | null
   action: RepairAction | null
+}
+
+export type RepairPhase = 'preflight' | 'starting' | 'diagnosing' | 'awaiting-confirmation' | 'repairing' | 'retrying' | 'recovered' | 'completed' | 'failed'
+export type RepairOutcome = 'not-needed' | 'recovered' | 'failed' | 'awaiting-confirmation' | null
+
+export interface RepairActionSummary {
+  kind: RepairAction['kind']
+  target: string
+  status: 'applied' | 'rolled-back' | 'failed'
+  summary: string
+}
+
+export interface QuarantinedPluginSummary {
+  entryId: string
+  packageName: string | null
+  disposition: 'pending' | 'kept'
+  createdAt: string
+}
+
+export interface RepairSessionSummary {
+  id: string
+  phase: RepairPhase
+  outcome: RepairOutcome
+  diagnosis: RepairDiagnosis | null
+  actions: RepairActionSummary[]
+  repairAttempts: 0 | 1
+  retryAttempts: 0 | 1
+  quarantinedPlugin: QuarantinedPluginSummary | null
 }
 
 export interface BackupSummary {

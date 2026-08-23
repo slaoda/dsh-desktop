@@ -129,6 +129,13 @@ export class RepairBaselineStore {
   }
 
   async capture(input: CaptureRepairBaselineInput): Promise<RepairBaseline> {
+    const baseline = await this.snapshot(input)
+    await mkdir(path.dirname(this.file), { recursive: true })
+    await writeFileAtomic(this.file, `${JSON.stringify(baseline, null, 2)}\n`, { mode: 0o600 })
+    return baseline
+  }
+
+  async snapshot(input: CaptureRepairBaselineInput): Promise<RepairBaseline> {
     if (input.source === 'external') throw new Error('外部 Harness 不能写入托管启动基线')
     const version = exactVersionSchema.parse(input.version)
     const packageFile = path.join(this.profileRoot, 'package.json')
@@ -137,7 +144,7 @@ export class RepairBaselineStore {
     const [profile, profilePackageFingerprint, profilePatchFingerprint, homePatchFingerprint] = await Promise.all([
       readProfileInventory(packageFile), fingerprint(packageFile), fingerprint(profilePatch), fingerprint(homePatch)
     ])
-    const baseline = repairBaselineSchema.parse({
+    return repairBaselineSchema.parse({
       schemaVersion: 1,
       capturedAt: new Date().toISOString(),
       version,
@@ -150,9 +157,6 @@ export class RepairBaselineStore {
         homePatch: homePatchFingerprint
       }
     })
-    await mkdir(path.dirname(this.file), { recursive: true })
-    await writeFileAtomic(this.file, `${JSON.stringify(baseline, null, 2)}\n`, { mode: 0o600 })
-    return baseline
   }
 
   async read(): Promise<RepairBaseline | null> {
