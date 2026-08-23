@@ -15,6 +15,7 @@ import { VersionManager } from './version-manager'
 import { BackupManager } from './backup-manager'
 import { resolveHarnessHome } from './harness-home'
 import { ExternalInstallationManager } from './external-installations'
+import { DiagnosticLogger } from './diagnostic-logger'
 
 const APP_NAME = 'DSH Desktop'
 const RELEASE_DOWNLOAD_URL = 'https://github.com/qufei1993/dsh-desktop/releases/latest'
@@ -41,6 +42,8 @@ let tray: Tray | null = null
 let closeToTrayEnabled = true
 let startAtLoginEnabled = false
 let loginItemInitialized = false
+let diagnosticLogger: DiagnosticLogger | null = null
+let lastDiagnosticSignature = ''
 
 app.setName(APP_NAME)
 if (process.platform === 'darwin') process.title = APP_NAME
@@ -566,6 +569,13 @@ function registerIpc(instance: AppController): void {
     const manualProxyUrl = mode === 'manual' ? proxyUrlSchema.parse(rawManualProxyUrl) : null
     return await instance.setNetworkPreferences(mode, manualProxyUrl)
   })
+  ipcMain.handle(channels.openDiagnosticsDirectory, async (event) => {
+    assertManager(event)
+    if (!diagnosticLogger) throw new Error('诊断日志不可用')
+    await diagnosticLogger.log('info', 'diagnostics-opened')
+    const error = await shell.openPath(diagnosticLogger.directory)
+    if (error) throw new Error(`无法打开诊断日志目录：${error}`)
+  })
   ipcMain.handle(channels.appUpdateSnapshot, (event) => {
     assertManager(event)
     return desktopUpdater?.snapshot()
@@ -597,6 +607,8 @@ app.whenReady().then(async () => {
   const resourcesRoot = app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'build-resources')
   const runtime = resolveRuntimePaths(resourcesRoot, app.isPackaged)
   const store = new StateStore(app.getPath('userData'))
+  diagnosticLogger = new DiagnosticLogger(app.getPath('userData'))
+  await diagnosticLogger.log('info', 'application-initializing', { appVersion: app.getVersion(), platform: process.platform, arch: process.arch, proxySource: proxy.source })
   const versions = new VersionManager(app.getPath('userData'), path.join(resourcesRoot, 'dsh'), runtime, proxy.url)
   const applyProxyPreferences = async (mode: ProxyMode, manualProxyUrl: string | null): Promise<void> => {
     const resolution = mode === 'manual' ? { source: 'manual' as const, url: proxyUrlSchema.parse(manualProxyUrl) } : proxy
@@ -627,11 +639,22 @@ app.whenReady().then(async () => {
     process.platform === 'darwin' ? checkLatestManualRelease : undefined
   )
   desktopUpdater.on('changed', (snapshot: AppUpdateSnapshot) => {
+    void diagnosticLogger?.log(snapshot.status === 'error' ? 'error' : 'info', 'desktop-update', { status: snapshot.status, availableVersion: snapshot.availableVersion, message: snapshot.message })
     sendToManager(channels.appUpdateChanged, snapshot)
     if (snapshot.status === 'available') void notifyDesktopUpdate(snapshot)
   })
   controller.on('snapshot', (snapshot: AppSnapshot) => {
     latestSnapshotForWindowTitle = snapshot
+    const diagnosticSignature = `${snapshot.runtimeStatus}:${snapshot.selectedVersion}:${snapshot.selectedExternalId}:${snapshot.error ?? ''}`
+    if (diagnosticSignature !== lastDiagnosticSignature) {
+      lastDiagnosticSignature = diagnosticSignature
+      void diagnosticLogger?.log(snapshot.error ? 'error' : 'info', 'harness-state', {
+        runtimeStatus: snapshot.runtimeStatus,
+        selectedVersion: snapshot.selectedVersion,
+        external: snapshot.selectedExternalId !== null,
+        error: snapshot.error
+      })
+    }
     applyDesktopPreferences(snapshot)
     updateTrayMenu(snapshot)
     if (snapshot.locale !== activeLocale || snapshot.localePreference !== activeLocalePreference) {
@@ -646,7 +669,10 @@ app.whenReady().then(async () => {
     updateMenuDshUpdateHint(snapshot)
     if (['idle', 'failed'].includes(snapshot.runtimeStatus) && dshWindow && !dshWindow.isDestroyed()) dshWindow.close()
   })
-  controller.on('progress', (progress: InstallProgress) => sendToManager(channels.installProgress, progress))
+  controller.on('progress', (progress: InstallProgress) => {
+    void diagnosticLogger?.log(progress.phase === 'failed' ? 'error' : 'info', 'install-progress', progress as unknown as Record<string, unknown>)
+    sendToManager(channels.installProgress, progress)
+  })
   registerIpc(controller)
   const initialSnapshot = await controller.initialize()
   await applyProxyPreferences(initialSnapshot.proxyMode, initialSnapshot.manualProxyUrl)

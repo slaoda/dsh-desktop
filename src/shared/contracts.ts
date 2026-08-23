@@ -143,6 +143,7 @@ export interface DesktopApi {
   uninstallExternalInstallation(id: string): Promise<AppSnapshot>
   setDesktopPreferences(closeToTray: boolean, startAtLogin: boolean): Promise<AppSnapshot>
   setNetworkPreferences(mode: ProxyMode, manualProxyUrl: string | null): Promise<AppSnapshot>
+  openDiagnosticsDirectory(): Promise<void>
   getAppUpdate(): Promise<AppUpdateSnapshot>
   checkAppUpdate(): Promise<AppUpdateSnapshot>
   downloadAppUpdate(): Promise<AppUpdateSnapshot>

@@ -4,6 +4,7 @@
 - [x] Existing baseline passes before behavior changes.
 - [x] Version channels classify stable and prerelease versions correctly.
 - [x] Registry input is validated and embedded credentials are rejected.
+- [x] System/automatic and credential-free manual proxies are supported.
 - [x] Failed candidate startup preserves the previous selected version.
 - [x] Interrupted switch transaction is recoverable.
 - [x] Automatic and manual backups exclude credentials and retain three copies.
@@ -12,6 +13,7 @@
 - [x] Project-local installations are read-only.
 - [ ] Running versions cannot be uninstalled.
 - [ ] GUI exposes the supported flows in Simplified Chinese and English.
+- [x] Diagnostic logs are rotated, redacted, and openable from the GUI.
 - [ ] Windows installer allows a custom application directory.
 - [ ] Tray/start-at-login behavior works on Windows 11.
 - [ ] `npm run verify` passes.

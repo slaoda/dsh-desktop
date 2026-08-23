@@ -18,6 +18,7 @@ export const channels = {
   uninstallExternalInstallation: 'dsh:uninstall-external-installation',
   setDesktopPreferences: 'desktop:set-preferences',
   setNetworkPreferences: 'desktop:set-network-preferences',
+  openDiagnosticsDirectory: 'desktop:open-diagnostics-directory',
   stateChanged: 'dsh:state-changed',
   installProgress: 'dsh:install-progress',
   appUpdateSnapshot: 'desktop-update:snapshot',

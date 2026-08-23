@@ -328,6 +328,7 @@ function App(): React.JSX.Element {
           <label className="network-setting"><span>{language.networkProxy}</span><select value={proxyModeDraft} disabled={busyAction !== null} onChange={(event) => setProxyModeDraft(event.target.value as ProxyMode)}><option value="system">{language.systemProxy}</option><option value="manual">{language.manualProxy}</option></select></label>
           {proxyModeDraft === 'manual' && <input className="proxy-input" value={proxyUrlDraft} disabled={busyAction !== null} onChange={(event) => setProxyUrlDraft(event.target.value)} placeholder="http://127.0.0.1:7890" aria-label={language.manualProxyAddress} />}
           <button type="button" className="network-save" disabled={busyAction !== null || (proxyModeDraft === snapshot.proxyMode && (proxyModeDraft !== 'manual' || proxyUrlDraft === (snapshot.manualProxyUrl ?? '')))} onClick={() => void saveNetworkPreferences()}>{language.saveNetwork}</button>
+          <button type="button" className="diagnostics-button" disabled={busyAction !== null} onClick={() => void window.dshDesktop.openDiagnosticsDirectory()}>{language.openDiagnostics}</button>
         </section>
       </aside>
 
@@ -468,6 +469,7 @@ function copy(locale: AppLocale) {
     existingInstallations: 'Existing installations', rescan: 'Rescan this computer', scanningInstallations: 'Scanning for existing Harness installations…', readOnly: 'Read-only', inPlace: 'In-place', useInPlace: 'Use', noExistingInstallations: 'No verified existing installations found.',
     desktopPreferences: 'Desktop', closeToTray: 'Close to tray', startAtLogin: 'Start at login', savingDesktopPreferences: 'Saving desktop preferences…',
     networkProxy: 'Network proxy', systemProxy: 'System / auto', manualProxy: 'Manual', manualProxyAddress: 'Manual proxy address', saveNetwork: 'Apply network', savingNetworkPreferences: 'Applying network proxy…',
+    openDiagnostics: 'Open diagnostic logs',
     searchVersion: 'Search versions', showPrerelease: 'Show prereleases', refreshVersions: 'Refresh official versions', syncingVersions: 'Syncing official npm versions…',
     versionCount: (count: number) => `${count} version${count === 1 ? '' : 's'}`, latest: 'Latest', inUse: 'In use', switching: 'Switching…', switch: 'Switch', installing: 'Installing…', install: 'Install', uninstalling: 'Uninstalling…', uninstall: 'Uninstall',
     switchingTo: (version: string) => `Switching to ${version}…`, installingVersion: (version: string) => `Installing ${version}…`, uninstallingVersion: (version: string) => `Uninstalling ${version}…`,
@@ -492,6 +494,7 @@ function copy(locale: AppLocale) {
     existingInstallations: '本机既有安装', rescan: '重新扫描本机', scanningInstallations: '正在扫描本机 Harness 安装…', readOnly: '只读', inPlace: '原地管理', useInPlace: '使用', noExistingInstallations: '未发现已验证的既有安装。',
     desktopPreferences: '桌面设置', closeToTray: '关闭到托盘', startAtLogin: '开机启动', savingDesktopPreferences: '正在保存桌面设置…',
     networkProxy: '网络代理', systemProxy: '系统/自动', manualProxy: '手动', manualProxyAddress: '手动代理地址', saveNetwork: '应用网络设置', savingNetworkPreferences: '正在应用网络代理…',
+    openDiagnostics: '打开诊断日志',
     searchVersion: '搜索版本号', showPrerelease: '显示预发布版本', refreshVersions: '刷新官方版本', syncingVersions: '正在同步 npm 官方版本…',
     versionCount: (count: number) => `${count} 个版本`, latest: '最新', inUse: '使用中', switching: '切换中…', switch: '切换', installing: '安装中…', install: '安装', uninstalling: '卸载中…', uninstall: '卸载',
     switchingTo: (version: string) => `正在切换到 ${version}…`, installingVersion: (version: string) => `正在安装 ${version}…`, uninstallingVersion: (version: string) => `正在卸载 ${version}…`,

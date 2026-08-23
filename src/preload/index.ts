@@ -22,6 +22,7 @@ const api: DesktopApi = {
   uninstallExternalInstallation: (id: string) => ipcRenderer.invoke(channels.uninstallExternalInstallation, id),
   setDesktopPreferences: (closeToTray: boolean, startAtLogin: boolean) => ipcRenderer.invoke(channels.setDesktopPreferences, closeToTray, startAtLogin),
   setNetworkPreferences: (mode: ProxyMode, manualProxyUrl: string | null) => ipcRenderer.invoke(channels.setNetworkPreferences, mode, manualProxyUrl),
+  openDiagnosticsDirectory: () => ipcRenderer.invoke(channels.openDiagnosticsDirectory),
   getAppUpdate: () => ipcRenderer.invoke(channels.appUpdateSnapshot),
   checkAppUpdate: () => ipcRenderer.invoke(channels.appUpdateCheck),
   downloadAppUpdate: () => ipcRenderer.invoke(channels.appUpdateDownload),
