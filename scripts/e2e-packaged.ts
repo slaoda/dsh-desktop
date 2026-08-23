@@ -79,7 +79,7 @@ await writeFile(path.join(removablePackageRoot, 'cli.js'), 'throw new Error("E2E
 await writeFile(path.join(failingPackageRoot, 'package.json'), JSON.stringify({
   name: '@deepseek-ai/dsh', version: failingVersion, bin: { dsh: 'cli.js' }
 }))
-await writeFile(path.join(failingPackageRoot, 'cli.js'), 'console.error("Error: packaged DSH startup fixture failed")\nprocess.exit(1)\n')
+await writeFile(path.join(failingPackageRoot, 'cli.js'), 'if (process.argv.includes("--dump-config")) { console.log("[]"); process.exit(0) }\nconsole.error("Error: packaged DSH startup fixture failed")\nprocess.exit(1)\n')
 await writeFile(path.join(repairPackageRoot, 'package.json'), JSON.stringify({
   name: '@deepseek-ai/dsh', version: repairVersion, bin: { dsh: 'cli.js' }
 }))
