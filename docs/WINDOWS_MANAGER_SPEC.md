@@ -1,77 +1,48 @@
-# Windows Harness Manager Specification
+# Windows Harness 管理器规格
 
-English | [简体中文](WINDOWS_MANAGER_SPEC.zh-CN.md)
+状态：已实施
 
-Status: approved for implementation
+## 范围
 
-## Goal
+- 支持 Windows 11 x64，提供可自定义目录的图形化安装程序。
+- 内置 Node.js、pnpm 和官方 Harness，不依赖系统开发环境。
+- Harness 只监听 `127.0.0.1`。
+- 支持精确版本安装、保留、切换、启动、停止和卸载。
+- 提供稳定版、预览版和全部版本渠道。
+- 支持系统代理、无凭据手动代理和 npm 兼容镜像。
+- 支持托盘、关闭到托盘和开机启动。
 
-Turn DSH Desktop into a safe, one-click Windows 11 x64 manager for non-technical DeepSeek Harness users. The application installs its own runtime, keeps multiple official Harness versions, detects eligible existing installations, and makes updates recoverable.
+## 更新与恢复
 
-## Product scope
+切换可能影响数据的版本前，管理器创建排除凭据的安全备份。候选版本必须成功启动并通过本机健康检查后才提交选择；失败时保留旧版本和备份。未完成事务会在下次启动时恢复。
 
-- Ship a graphical Windows `.exe` installer with a user-selectable application directory.
-- Bundle Node.js and the package manager. Normal use must not require a terminal, system Node.js, npm, or pnpm.
-- Bind Harness only to `127.0.0.1`; never expose it to the LAN.
-- Let the user install, keep, switch, launch, stop, and uninstall exact official Harness versions.
-- Offer Stable, Preview, and All versions. Installing or switching is always an explicit user action.
-- Detect independent/global existing Harness installations and manage them in place after explicit confirmation. Project-local dependencies are visible but read-only.
-- Keep application uninstall separate from Harness-version uninstall. Never remove a running version.
-- Support system proxy, an optional manual proxy, and an optional custom npm-compatible registry.
-- Show download progress, retry recoverable failures, and verify the downloaded official package before publication.
-- Provide close-to-tray and optional start-at-login behavior.
+备份默认保留最近三份，恢复支持“仅配置”和“配置及会话”。凭据、环境文件、密钥、符号链接和未知根目录永远不会进入备份。
 
-## Recoverable updates
+## 既有安装
 
-Before a version switch that can affect user data, the manager creates a backup of the selected Harness home. It excludes credential files and retains the latest three automatic/manual backups by default. A candidate version is launched and health-checked before the selection is committed. If startup fails, the previous version remains selected and can be relaunched. Interrupted transactions are detected on the next start.
+可管理安装必须满足：
 
-Known migrations may run only from an allowlisted migration identifier implemented by the manager. Unknown breaking changes require an explicit warning; no downloaded package can provide or execute a manager migration script.
+1. 包清单确认官方 `@deepseek-ai/dsh` 和有效语义版本。
+2. CLI 入口位于包根目录内。
+3. 安装属于用户明确选择的独立安装或已验证 npm 全局安装。
+4. 使用内置 Node.js、绝对 CLI 路径和 `shell: false` 启动。
 
-Restore supports configuration-only and configuration-plus-session modes. Restore never copies credentials.
+项目依赖和来源不明的 PATH 安装只读展示。只有验证通过的 npm 全局安装可调用对应包管理器卸载；管理器不递归删除外部包目录。
 
-## Existing-installation ownership policy
+## 安全边界
 
-An installation is manageable only when all of these are true:
+- API Key 仅在官方 Harness 页面输入，管理器不展示、记录、备份或恢复。
+- IPC、路径、URL、版本号、包清单和进程输出均按不可信数据校验。
+- 镜像只允许 HTTP/HTTPS，手动代理不得嵌入凭据。
+- 安装后校验官方包身份、版本和 CLI。
+- 日志隐藏凭据和代理认证信息。
+- 卸载和恢复必须由用户在 GUI 中明确确认。
 
-1. Its package manifest identifies the exact official `@deepseek-ai/dsh` package and a valid semantic version.
-2. Its CLI entry resolves inside that package root.
-3. It is an independent installation selected by the user or a verified global npm installation.
-4. The manager invokes the resolved absolute CLI with the bundled Node.js and `shell: false`.
+## 验收
 
-Project-local dependencies and ambiguous PATH entries are reported as read-only. In-place uninstall is available only for a verified global npm installation and uses the matching package manager's explicit global uninstall operation. The manager never recursively deletes an external package root.
-
-## Data and security boundaries
-
-- API keys are entered in the official Harness UI and are never bundled, displayed, logged, backed up, or restored by the manager.
-- Filesystem paths, versions, URLs, IPC input, package manifests, and process output are untrusted and validated in the main process.
-- Registry URLs must use HTTP or HTTPS and contain no embedded credentials. Official package identity and version are verified after installation.
-- Logs redact credentials and proxy authentication. Diagnostic logs, transaction journals, backups, and managed versions live in application-owned data directories.
-- A disk-space preflight runs before installation and backup.
-- Uninstall and restore actions require explicit confirmation in the GUI.
-
-## Primary user flows
-
-1. First launch detects the environment, shows any existing installations, and recommends a version channel.
-2. The user chooses an application-managed version or explicitly selects an eligible existing installation.
-3. Launch waits for the loopback health check, opens the official Harness UI, and guides first-time API-key setup there.
-4. Update creates a backup, installs without replacing the old version, health-checks the candidate, and commits the switch only on success.
-5. Failure leaves the old selection and backup intact and presents a concise recovery action.
-
-## Acceptance criteria
-
-- A clean Windows 11 x64 machine can install and launch Harness without a preinstalled runtime.
-- Stable/Preview/All catalogs classify prereleases correctly and exact-version installation remains possible.
-- A failed candidate launch cannot replace the selected working version.
-- A running version cannot be uninstalled.
-- Credential fixtures never appear in backup output or logs.
-- Project-local detections cannot be selected for destructive management.
-- The packaged app binds only to `127.0.0.1`, survives an interrupted install/update, and passes the repository verification and packaged smoke tests.
-
-## Initial delivery slices
-
-1. Version channels, registry settings, and persisted policy.
-2. Transactional switch with journal and health-check commit.
-3. Safe backup inventory, retention, and selective restore.
-4. Existing-install discovery and ownership classification.
-5. Windows management UI, tray/startup controls, diagnostics, and installer verification.
-
+- 干净 Windows 11 x64 电脑无需 Node.js 即可安装并运行。
+- 新版本启动失败不会替换当前正常版本。
+- 正在运行或当前使用的版本不能卸载。
+- 凭据不会进入备份和日志。
+- 项目依赖不能进入破坏性管理流程。
+- 打包应用仅使用回环地址，并通过源码、官方 Harness 和安装包端到端验证。

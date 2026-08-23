@@ -1,90 +1,22 @@
-English | [简体中文](CHANGELOG.zh-CN.md)
+# 变更日志
 
-# Changelog
+## 未发布
 
-This file records notable changes to DSH Desktop. Versions follow [Semantic Versioning](https://semver.org/).
+### 变更
 
-## Unreleased
+- 项目收敛为 Windows 11 x64 专用管理器，删除 macOS 构建链和平台分支。
+- 删除未启用的管理器自身自动更新；Harness 版本更新不受影响。
+- 精简历史设计、重复文档、工程流程和图片资源。
 
 ## [0.3.0] - 2026-08-24
 
-### Added
+### 新增
 
-- Added stable, preview, and complete official Harness version channels, exact-version install/switch/remove, custom registry selection, and disk-space preflight.
-- Added verified discovery and in-place management of eligible existing Harness installations, while keeping project-local installs read-only.
-- Added credential-safe three-generation backups, selective configuration/session restore, transactional health-checked switching, crash recovery, and automatic rollback.
-- Added Windows tray behavior, optional start-at-login, custom installation directory support, manual or system proxy settings, and redacted rotating diagnostics.
+- 稳定版、预览版和全部官方 Harness 版本渠道，支持精确版本安装、切换与卸载。
+- 合格既有 Harness 安装的验证检测与原地管理，项目依赖保持只读。
+- 排除凭据的三代备份、选择性恢复、事务切换、健康检查和失败回滚。
+- Windows 托盘、开机启动、自定义安装位置、代理、镜像和脱敏诊断日志。
 
-### Changed
+### 变更
 
-- Updated the bundled official Harness to `0.1.1-rc.2` and its boot-protocol smoke coverage.
-- Disabled the inherited desktop self-update feed until a manager-owned trusted release repository is configured; Harness updates remain available.
-
-## [0.2.5] - 2026-08-23
-
-### Fixed
-
-- Surfaced the official DSH CLI's own error output when startup fails in a first-screen error panel with expandable details and copy support, so Version Manager shows the real cause (for example an incompatible `~/.dsh` credentials document written by a different DSH version) instead of hiding it below the version list or showing only the exit code.
-
-## [0.2.4] - 2026-08-22
-
-### Fixed
-
-- Made plugin commands resolve the currently selected official DSH CLI through a Desktop-owned launcher backed by the bundled Node.js runtime. This avoids reliance on a global `dsh` installation and on package-manager shims that retain deleted staging paths after exact-version installation, migration, or reinstallation.
-
-## [0.2.3] - 2026-08-21
-
-### Fixed
-
-- Added the bundled Node.js directory to DSH version installation `PATH`, so dependency lifecycle scripts work when DSH Desktop is launched from Finder or Explorer without a developer shell environment. Failed installations now retain a detailed diagnostic log instead of showing only truncated progress output.
-
-## [0.2.2] - 2026-08-21
-
-### Added
-
-- Added one-click removal of user-installed DSH versions from Version Manager. The bundled version and the currently selected version remain protected from removal, and removed versions remain available for reinstallation.
-
-### Fixed
-
-- Restricted DSH version installation to the official subprocess helper's lightweight permission script. Native dependencies now use their bundled platform prebuilds instead of attempting local `node-gyp` or CMake builds, so installing newly published DSH versions no longer requires developer toolchains.
-
-## [0.2.1] - 2026-08-21
-
-### Fixed
-
-- Replaced npm's pathological large-tree version installation with the bundled pnpm content-addressable store, while preserving official dependency build scripts. Installations now reuse downloaded packages, report dependency progress, stop after five minutes without output, and remove interrupted staging directories on the next launch.
-- Refreshed npm registry metadata before installing official DSH versions, preventing newly published versions from failing because of stale local metadata.
-- Determined the newest available DSH version from the highest valid package version instead of a potentially lagging npm `latest` tag.
-- Started DSH 0.1.0-rc.8 and later with `--no-open`, keeping the official web UI inside the desktop window without also opening the system browser.
-- Bundled pnpm 11.22.0 and exposed the bundled Node.js and pnpm commands only to official DSH child processes, so plugin operations work with a minimal GUI `PATH`. Unapproved dependency build scripts remain blocked without turning otherwise valid plugin updates into fatal `ERR_PNPM_IGNORED_BUILDS` failures.
-
-## [0.2.0] - 2026-08-16
-
-### Added
-
-- Detection of newer official DSH package versions, with a dismissible update notice in the official DSH window and a direct update action in Version Manager.
-
-## [0.1.0] - 2026-08-15
-
-### Added
-
-- Desktop applications for macOS Apple Silicon, macOS Intel, and Windows x64.
-- A bundled Node.js 24 LTS runtime and a validated official DSH version.
-- Official npm catalog browsing, installation, retention, and switching for DSH versions.
-- Direct launch into the official DSH interface, with Version Manager available from the application menu.
-- User-controlled DSH Desktop updates through GitHub Releases: manual download on macOS and in-app installation on Windows.
-- Automatic proxy selection from environment variables, system settings, or `127.0.0.1:7890`.
-- A native About panel, Version Manager menu icon, and app-update control.
-- Simplified Chinese and English interfaces with system-language defaults and saved user selection.
-
-### Changed
-
-- Reduced release downloads by keeping only target-platform native DSH dependencies, removing Windows debug symbols, and enabling maximum installer compression.
-- Simplified the Release download list to three platform installers; Windows retains only its required update manifest.
-
-### Security
-
-- The DSH page runs in a sandboxed window without preload, Node.js, or Electron APIs.
-- The local DSH service is restricted to `127.0.0.1`.
-- Runtime verification, exact-version installation, and automated product-boundary auditing.
-- Community builds without paid platform certificates, using macOS ad-hoc signing.
+- 内置官方 Harness 更新至 `0.1.1-rc.2`。

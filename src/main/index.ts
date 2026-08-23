@@ -299,8 +299,7 @@ function updateAboutPanel(): void {
     applicationVersion: app.getVersion(),
     version: copy.version(app.getVersion()),
     copyright: 'Copyright © 2026 DSH Desktop contributors',
-    credits: copy.credits,
-    website: 'https://github.com/qufei1993/dsh-desktop'
+    credits: copy.credits
   })
 }
 

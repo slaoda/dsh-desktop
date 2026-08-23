@@ -1,90 +1,48 @@
-<p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
-
 <div align="center">
-  <img src="build/icon-source.svg" width="112" alt="DSH Desktop icon">
+  <img src="build/icon-source.svg" width="96" alt="DSH Desktop 图标">
   <h1>DSH Desktop</h1>
-  <p>Run and manage the official DeepSeek Harness without installing Node.js.</p>
-  <p align="center"><a href="https://github.com/qufei1993/dsh-desktop/actions/workflows/build.yml"><img src="https://github.com/qufei1993/dsh-desktop/actions/workflows/build.yml/badge.svg" alt="Build" height="20"></a>&nbsp;&nbsp;<a href="https://github.com/qufei1993/dsh-desktop/releases/latest"><img src="https://img.shields.io/github/v/release/qufei1993/dsh-desktop?display_name=tag" alt="Latest release" height="20"></a>&nbsp;&nbsp;<a href="LICENSE"><img src="https://img.shields.io/github/license/qufei1993/dsh-desktop" alt="License" height="20"></a></p>
+  <p>面向 Windows 11 的 DeepSeek Harness 一键安装与版本管理工具。</p>
 </div>
 
-DSH Desktop is a community-maintained DeepSeek Harness desktop client for macOS and Windows. It bundles Node.js 24 LTS and a pinned pnpm runtime, installs and retains official `@deepseek-ai/dsh` versions, and runs the official `dsh web` interface in a dedicated window.
+DSH Desktop 自带 Node.js、pnpm 和经过校验的官方 `@deepseek-ai/dsh`，普通用户无需准备开发环境即可使用。
 
-> [!IMPORTANT]
-> This project is maintained independently by the community and is not affiliated with DeepSeek. DSH Desktop does not modify DeepSeek Harness; the official DSH package continues to operate under its own license and behavior.
+> 本项目由社区独立维护，与 DeepSeek 官方无隶属关系。管理器不修改官方 Harness。
 
-## Download and use
+## 功能
 
-Download the installer for your system from [GitHub Releases](https://github.com/qufei1993/dsh-desktop/releases/latest):
+- Windows 11 x64 图形化安装程序，支持自定义安装目录。
+- 安装、保留、切换和卸载指定 Harness 版本。
+- 稳定版、预览版和全部版本三个渠道。
+- 检测本机已有 Harness；验证通过的独立或全局安装可原地管理，项目依赖保持只读。
+- 更新前备份、候选版本健康检查、失败回滚和中断恢复。
+- 配置或配置加会话的选择性备份与恢复，凭据始终排除。
+- 系统代理、无凭据手动代理和自定义 npm 镜像。
+- 托盘运行、关闭到托盘、开机启动和脱敏诊断日志。
+- 简体中文与 English 界面。
 
-| System | Installer |
-| --- | --- |
-| macOS Apple Silicon | `DSH-Desktop-*-arm64.dmg` |
-| macOS Intel | `DSH-Desktop-*-x64.dmg` |
-| Windows 10/11 x64 | `DSH-Desktop-Setup-*-x64.exe` |
+## 安装与使用
 
-After installation, DSH Desktop opens the official DeepSeek Harness interface directly. Open **Version Manager…** from the application menu when you need to install or switch DSH versions.
+1. 运行 `DSH-Desktop-Setup-<版本>-x64.exe`。
+2. 如 SmartScreen 提示未知发布者，核对发布页 SHA-256 后选择“更多信息 -> 仍要运行”。
+3. 启动 DSH Desktop；内置 Harness 可直接运行。
+4. 从应用菜单或托盘打开“版本管理”，安装或切换其他版本。
+5. API Key 和模型设置只在官方 Harness 页面中填写。
 
-> [!NOTE]
-> This project is at an early stage. If no installer is available under Releases yet, wait for the first public release. Building from source is not recommended for regular users.
+Harness 只监听 `127.0.0.1`，不会暴露到局域网。Harness 更新由用户在版本管理器中触发；管理器自身当前不提供自动更新。
 
-## Screenshots
+## 安全边界
 
-### Official DeepSeek Harness workspace
+- 官方 Harness 在独立的沙箱窗口中运行，不获得 Electron 或管理器 IPC 权限。
+- 安装后校验官方包名、精确版本和 CLI 入口。
+- 外部路径、URL、版本号、包清单和 IPC 数据均在主进程重新校验。
+- 管理器不记录、备份或恢复 API Key、Token、`.env` 和密钥文件。
+- 卸载托管版本不会删除 Harness 用户目录。
 
-DSH Desktop launches the official DSH interface directly in a dedicated desktop window.
+完整规则见 [Windows 管理器规格](docs/WINDOWS_MANAGER_SPEC.md)。
 
-![Official DeepSeek Harness workspace running in DSH Desktop](docs/images/dsh-workspace.png)
+## 开发
 
-### Version Manager
-
-Install, retain, and switch official DSH versions without changing the official interface or user data.
-
-![DSH Desktop Version Manager](docs/images/version-manager.png)
-
-## Core features
-
-- Cross-platform desktop client for official DeepSeek Harness on macOS and Windows.
-- Bundled Node.js 24 LTS and pnpm, so users do not need to install either tool themselves.
-- Install, keep, and switch official `@deepseek-ai/dsh` versions.
-- Detect newer official DSH versions, show a dismissible update notice in the DSH workspace, and update from Version Manager.
-- Run official `dsh web` in a dedicated, sandboxed window.
-- Bilingual UI (English / 简体中文) with manual switching.
-- Built-in release update checks and SHA-256 checksum validation.
-
-## Product boundaries
-
-DSH Desktop manages the runtime, versions, and local process. It does not:
-
-- fork, patch, rebuild, or inject code into official DSH;
-- manage API keys, models, sessions, plugins, Skills, or MCP;
-- read, migrate, back up, or delete DSH user data;
-- silently upgrade or replace the DSH version selected by the user;
-- expose the local DSH service to the LAN.
-
-Official DSH and DSH Desktop use separate update channels. DSH versions come from npm and are installed by the user. DSH Desktop checks this repository's GitHub Releases only under user action.
-
-> [!WARNING]
-> Current installers are community builds without trusted Apple or Windows code-signing certificates. macOS is ad-hoc signed but not notarized and may require approval under **System Settings → Privacy & Security**. Windows may show an **Unknown publisher** or SmartScreen warning. Download the installer matching your operating system from the latest Release.
-
-## Architecture
-
-```mermaid
-flowchart LR
-  user["User"] -->|start| main["Electron main process"]
-  main --> node["Bundled Node.js 24 LTS"]
-  main --> update["GitHub release updater"]
-  main --> versions["Version Manager"]
-  node --> dsh["@deepseek-ai/dsh"]
-  versions -->|install/query| registry["npm registry"]
-  dsh -->|127.0.0.1:random| window["Sandboxed DSH web window"]
-  update --> releases["GitHub Releases"]
-```
-
-Official DSH runs only on local loopback (`127.0.0.1`) and uses minimal IPC.
-
-## Local development
-
-Developers need Node.js 22.19+ or 24+:
+开发环境需要 Windows x64 和 Node.js 22.19+：
 
 ```bash
 npm ci
@@ -92,15 +50,17 @@ npm run prepare:runtime
 npm run dev
 ```
 
-`prepare:runtime` downloads and validates the pinned Node.js 24 LTS runtime, copies the pinned pnpm package, then installs the bundled DSH version with that runtime. Generated files are stored under the ignored `build-resources/` directory.
-
-Before submitting changes, run:
+常用验证命令：
 
 ```bash
 npm run verify
 npm run test:official
+npm run package:win:x64
+npm run test:packaged
 ```
 
-`verify` runs consistency checks, type checking, automated tests, the production build, and the product-boundary audit. See [CONTRIBUTING.md](CONTRIBUTING.md), [SUPPORT.md](SUPPORT.md), and [CHANGELOG.md](CHANGELOG.md) for workflow.
+构建资源位于被 Git 忽略的 `build-resources/`，安装包输出到 `release/`。发布步骤见 [发布指南](docs/RELEASING.md)。
 
-Design details are in [docs/superpowers/specs/2026-08-15-dsh-desktop-design.md](docs/superpowers/specs/2026-08-15-dsh-desktop-design.md) and maintainers should also read [docs/RELEASING.md](docs/RELEASING.md).
+## 许可证
+
+桌面管理器代码使用 [MIT License](LICENSE)。官方 Harness 及其依赖按各自许可证运行。

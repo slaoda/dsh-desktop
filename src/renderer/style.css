@@ -20,10 +20,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(65,118,230,.
 .language-switch:hover { color: var(--forest); border-color: #a9c3f5; background: #f5f8ff; transform: translateY(-1px); }
 .desktop-version { display: flex; align-items: center; gap: 4px; color: #7b828d; font-size: 10px; }
 .desktop-version strong { color: #4f5661; font: 650 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.desktop-repo-link { display: flex; align-items: center; gap: 5px; height: 27px; padding: 0 7px; border: 1px solid transparent; border-radius: 7px; color: #8b929c; background: transparent; cursor: pointer; transition: color .15s ease, border-color .15s ease, background .15s ease; }
-.desktop-repo-link svg { width: 13px; height: 13px; transition: color .15s ease, fill .15s ease, transform .15s ease; }
-.desktop-repo-link:hover { color: #9a7217; border-color: #ead89e; background: #fff9e8; }
-.desktop-repo-link:hover svg { color: #c79319; fill: #f6c94f; transform: rotate(-8deg) scale(1.08); }
 .runtime-pill { display: flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid #dddcd5; border-radius: 999px; color: #69716b; background: rgba(255,255,255,.6); font-size: 11px; font-weight: 650; }
 .runtime-pill i { width: 6px; height: 6px; border-radius: 50%; background: #9aa19b; }
 .runtime-running { color: #17623d; border-color: #c7ddcd; background: #e6faed; }

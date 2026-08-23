@@ -2,17 +2,8 @@
   "name": "dsh-desktop",
   "version": "0.3.0",
   "private": true,
-  "description": "A community-maintained desktop client for DeepSeek Harness",
+  "description": "A Windows 11 manager for DeepSeek Harness",
   "license": "MIT",
-  "author": "qufei1993",
-  "homepage": "https://github.com/qufei1993/dsh-desktop",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/qufei1993/dsh-desktop.git"
-  },
-  "bugs": {
-    "url": "https://github.com/qufei1993/dsh-desktop/issues"
-  },
   "keywords": [
     "deepseek",
     "deepseek-harness",
@@ -37,8 +28,7 @@
     "release:notes": "node scripts/extract-changelog.mjs",
     "version:check": "node scripts/version.mjs check",
     "version:set": "node scripts/version.mjs set",
-    "verify:agents": "tsx scripts/verify-agent-infrastructure.ts",
-    "verify": "npm run version:check && npm run verify:agents && npm run typecheck && npm test && npm run build && npm run audit:boundary",
+    "verify": "npm run version:check && npm run typecheck && npm test && npm run build && npm run audit:boundary",
     "prepare:runtime": "tsx scripts/prepare-resources.ts",
     "package:win:x64": "npm run prepare:runtime && npm run build && electron-builder --win --x64 --publish never && npm run release:metadata"
   },
