@@ -39,8 +39,8 @@ import { contextBridge } from 'electron'
 import type { DesktopApi } from '../shared/contracts'
 `
     expect(sourceBoundaryViolations('src/preload/index.ts', valid)).toEqual([])
-    expect(sourceBoundaryViolations('src/preload/index.ts', "import updater from '../main/app-updater'")).toEqual([
-      'preload may import only electron and src/shared, got ../main/app-updater'
+    expect(sourceBoundaryViolations('src/preload/index.ts', "import controller from '../main/controller'")).toEqual([
+      'preload may import only electron and src/shared, got ../main/controller'
     ])
   })
 

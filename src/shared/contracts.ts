@@ -111,18 +111,6 @@ export interface InstallProgress {
   message: string
 }
 
-export type AppUpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error' | 'unsupported'
-export type AppUpdateDelivery = 'automatic' | 'manual'
-
-export interface AppUpdateSnapshot {
-  currentVersion: string
-  availableVersion: string | null
-  delivery: AppUpdateDelivery
-  status: AppUpdateStatus
-  percent: number | null
-  message: string | null
-}
-
 export interface DesktopApi {
   getSnapshot(): Promise<AppSnapshot>
   refresh(): Promise<AppSnapshot>
@@ -144,11 +132,6 @@ export interface DesktopApi {
   setDesktopPreferences(closeToTray: boolean, startAtLogin: boolean): Promise<AppSnapshot>
   setNetworkPreferences(mode: ProxyMode, manualProxyUrl: string | null): Promise<AppSnapshot>
   openDiagnosticsDirectory(): Promise<void>
-  getAppUpdate(): Promise<AppUpdateSnapshot>
-  checkAppUpdate(): Promise<AppUpdateSnapshot>
-  downloadAppUpdate(): Promise<AppUpdateSnapshot>
-  installAppUpdate(): Promise<void>
   onStateChanged(listener: (snapshot: AppSnapshot) => void): () => void
   onInstallProgress(listener: (progress: InstallProgress) => void): () => void
-  onAppUpdateChanged(listener: (snapshot: AppUpdateSnapshot) => void): () => void
 }

@@ -1,10 +1,8 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, net, Notification, session, shell, Tray } from 'electron'
-import electronUpdater from 'electron-updater'
+import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeImage, net, Notification, session, shell, Tray } from 'electron'
 import os from 'node:os'
 import path from 'node:path'
 import semver from 'semver'
-import { backupIdSchema, backupScopeSchema, channels, clipboardTextSchema, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, proxyModeSchema, proxyUrlSchema, registryUrlSchema, releaseChannelSchema, type AppLocale, type AppSnapshot, type AppUpdateSnapshot, type InstallProgress, type LocalePreference, type ProxyMode } from '../shared/contracts'
-import { DesktopUpdater } from './app-updater'
+import { backupIdSchema, backupScopeSchema, channels, clipboardTextSchema, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, proxyModeSchema, proxyUrlSchema, registryUrlSchema, releaseChannelSchema, type AppLocale, type AppSnapshot, type InstallProgress, type LocalePreference, type ProxyMode } from '../shared/contracts'
 import { applyNetworkProxy, configureNetworkProxy } from './network-proxy'
 import { AppController } from './controller'
 import { DshSupervisor } from './dsh-supervisor'
@@ -18,22 +16,15 @@ import { ExternalInstallationManager } from './external-installations'
 import { DiagnosticLogger } from './diagnostic-logger'
 
 const APP_NAME = 'DSH Desktop'
-const RELEASE_DOWNLOAD_URL = 'https://github.com/qufei1993/dsh-desktop/releases/latest'
-const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/qufei1993/dsh-desktop/releases/latest'
-const LATEST_RELEASE_API_URL_OVERRIDE = process.env.DSH_DESKTOP_TEST_RELEASE_API_URL
-const TEST_CURRENT_VERSION = process.env.DSH_DESKTOP_TEST_CURRENT_VERSION
-const TEST_ENABLE_UPDATE = process.env.DSH_DESKTOP_TEST_ENABLE_UPDATE
 const DEEPSEEK_HARNESS_WINDOW_TITLE = 'DeepSeek Harness'
 let managerWindow: BrowserWindow | null = null
 let dshWindow: BrowserWindow | null = null
 let dshUpdatePopover: BrowserWindow | null = null
 let latestSnapshotForWindowTitle: AppSnapshot | null = null
 let controller: AppController | null = null
-let desktopUpdater: DesktopUpdater | null = null
 let isQuitting = false
 let isOpeningPrimary = false
 let notifiedVersion: string | null = null
-let notifiedDesktopVersion: string | null = null
 let dismissedDshPopoverVersion: string | null = null
 let dshPopoverSignature: string | null = null
 let activeLocale: AppLocale = 'zh-CN'
@@ -51,17 +42,7 @@ function isSafeExternalUrl(raw: string): boolean {
   try { return new URL(raw).protocol === 'https:' } catch { return false }
 }
 
-async function checkLatestManualRelease(): Promise<string | null> {
-  const response = await net.fetch(LATEST_RELEASE_API_URL_OVERRIDE ?? LATEST_RELEASE_API_URL, { headers: { accept: 'application/vnd.github+json' } })
-  if (!response.ok) throw new Error(`GitHub Release 查询失败：${response.status}`)
-  const release = await response.json() as { tag_name?: unknown; draft?: unknown; prerelease?: unknown }
-  if (release.draft === true || release.prerelease === true || typeof release.tag_name !== 'string') return null
-  const version = release.tag_name.replace(/^v/, '')
-  if (!semver.valid(version)) throw new Error('GitHub Release 版本号无效')
-  return version
-}
-
-function sendToManager(channel: string, payload: AppSnapshot | AppUpdateSnapshot | InstallProgress): void {
+function sendToManager(channel: string, payload: AppSnapshot | InstallProgress): void {
   if (managerWindow && !managerWindow.isDestroyed()) managerWindow.webContents.send(channel, payload)
 }
 
@@ -293,14 +274,8 @@ function installApplicationMenu(): void {
     label: copy.about,
     click: () => app.showAboutPanel()
   }
-  const checkUpdates: Electron.MenuItemConstructorOptions = {
-    id: 'check-for-updates',
-    label: copy.checkUpdates,
-    enabled: desktopUpdater !== null,
-    click: () => { showManagerWindow(); void desktopUpdater?.check() }
-  }
   const template: Electron.MenuItemConstructorOptions[] = [
-    { label: APP_NAME, submenu: [about, { type: 'separator' }, quickUpdateInDsh, openVersions, checkUpdates, languageMenu(copy), { type: 'separator' }, { role: 'quit', label: copy.quit }] },
+    { label: APP_NAME, submenu: [about, { type: 'separator' }, quickUpdateInDsh, openVersions, languageMenu(copy), { type: 'separator' }, { role: 'quit', label: copy.quit }] },
     { label: copy.edit, submenu: [{ role: 'undo', label: copy.undo }, { role: 'redo', label: copy.redo }, { type: 'separator' }, { role: 'cut', label: copy.cut }, { role: 'copy', label: copy.copy }, { role: 'paste', label: copy.paste }, { role: 'selectAll', label: copy.selectAll }] },
     { label: copy.window, submenu: [{ role: 'minimize', label: copy.minimize }, { role: 'zoom', label: copy.zoom }] }
   ]
@@ -327,34 +302,6 @@ function updateAboutPanel(): void {
     credits: copy.credits,
     website: 'https://github.com/qufei1993/dsh-desktop'
   })
-}
-
-async function notifyDesktopUpdate(snapshot: AppUpdateSnapshot): Promise<void> {
-  if (snapshot.status !== 'available' || !snapshot.availableVersion || notifiedDesktopVersion === snapshot.availableVersion) return
-  notifiedDesktopVersion = snapshot.availableVersion
-  const copy = mainCopy(activeLocale)
-  const confirm = await dialog.showMessageBox({
-    type: 'info',
-    title: copy.desktopUpdateTitle(snapshot.availableVersion),
-    message: snapshot.delivery === 'manual'
-      ? copy.desktopUpdatePromptManual(snapshot.availableVersion)
-      : copy.desktopUpdatePromptAuto(snapshot.availableVersion),
-    detail: copy.desktopUpdateBody,
-    buttons: [copy.promptUpdateNow, copy.promptUpdateLater],
-    defaultId: 0,
-    cancelId: 1,
-    noLink: true
-  })
-  if (confirm.response !== 0) return
-  if (snapshot.delivery === 'manual') {
-    await shell.openExternal(RELEASE_DOWNLOAD_URL)
-    return
-  }
-  if (!desktopUpdater) return
-  const downloaded = await desktopUpdater.download()
-  if (downloaded.status !== 'downloaded') return
-  if (controller?.isRuntimeActive()) await controller.stop()
-  desktopUpdater.install()
 }
 
 function notifyDshUpdate(snapshot: AppSnapshot): void {
@@ -563,24 +510,6 @@ function registerIpc(instance: AppController): void {
     const error = await shell.openPath(diagnosticLogger.directory)
     if (error) throw new Error(`无法打开诊断日志目录：${error}`)
   })
-  ipcMain.handle(channels.appUpdateSnapshot, (event) => {
-    assertManager(event)
-    return desktopUpdater?.snapshot()
-  })
-  ipcMain.handle(channels.appUpdateCheck, async (event) => {
-    assertManager(event)
-    return await desktopUpdater?.check()
-  })
-  ipcMain.handle(channels.appUpdateDownload, async (event) => {
-    assertManager(event)
-    return await desktopUpdater?.download()
-  })
-  ipcMain.handle(channels.appUpdateInstall, async (event) => {
-    assertManager(event)
-    if (!desktopUpdater) return
-    if (instance.isRuntimeActive()) await instance.stop()
-    desktopUpdater.install()
-  })
 }
 
 installApplicationMenu()
@@ -588,7 +517,6 @@ installApplicationMenu()
 app.whenReady().then(async () => {
   app.setAppUserModelId('dev.dsh.desktop')
   const proxy = await configureNetworkProxy(session.defaultSession)
-  await applyNetworkProxy(electronUpdater.autoUpdater.netSession, proxy)
   await session.fromPartition('persist:dsh-web').setProxy({ mode: 'direct' })
   const resourcesRoot = app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'build-resources')
   const runtime = resolveRuntimePaths(resourcesRoot, app.isPackaged)
@@ -599,7 +527,6 @@ app.whenReady().then(async () => {
   const applyProxyPreferences = async (mode: ProxyMode, manualProxyUrl: string | null): Promise<void> => {
     const resolution = mode === 'manual' ? { source: 'manual' as const, url: proxyUrlSchema.parse(manualProxyUrl) } : proxy
     await applyNetworkProxy(session.defaultSession, resolution)
-    await applyNetworkProxy(electronUpdater.autoUpdater.netSession, resolution)
     versions.setProxyUrl(resolution.url)
   }
   const externalInstallations = new ExternalInstallationManager(runtime)
@@ -610,28 +537,11 @@ app.whenReady().then(async () => {
     console.warn(error instanceof Error ? error.message : 'Harness 备份功能初始化失败')
   }
   const supervisor = new DshSupervisor(runtime.node, [runtime.commandDir, path.dirname(runtime.node)])
-  const currentAppVersion = TEST_CURRENT_VERSION && semver.valid(TEST_CURRENT_VERSION) ? TEST_CURRENT_VERSION : app.getVersion()
-  // This fork must not consume the base project's release feed: a future
-  // upstream desktop update could silently replace the Windows manager.
-  // Re-enable only after a manager-owned, signed release feed is configured.
-  const updateSupported = TEST_ENABLE_UPDATE === '1'
+  const currentAppVersion = app.getVersion()
   controller = new AppController(
     currentAppVersion, store, new DshRegistry(net.fetch as typeof fetch), versions, supervisor, runtime,
     normalizeSystemLocale(app.getLocale()), undefined, backupManager, externalInstallations, applyProxyPreferences
   )
-  desktopUpdater = new DesktopUpdater(
-    electronUpdater.autoUpdater,
-    currentAppVersion,
-    updateSupported,
-    process.platform === 'darwin' ? 'manual' : 'automatic',
-    async () => { await shell.openExternal(RELEASE_DOWNLOAD_URL) },
-    process.platform === 'darwin' ? checkLatestManualRelease : undefined
-  )
-  desktopUpdater.on('changed', (snapshot: AppUpdateSnapshot) => {
-    void diagnosticLogger?.log(snapshot.status === 'error' ? 'error' : 'info', 'desktop-update', { status: snapshot.status, availableVersion: snapshot.availableVersion, message: snapshot.message })
-    sendToManager(channels.appUpdateChanged, snapshot)
-    if (snapshot.status === 'available') void notifyDesktopUpdate(snapshot)
-  })
   controller.on('snapshot', (snapshot: AppSnapshot) => {
     latestSnapshotForWindowTitle = snapshot
     const diagnosticSignature = `${snapshot.runtimeStatus}:${snapshot.selectedVersion}:${snapshot.selectedExternalId}:${snapshot.error ?? ''}`
@@ -678,7 +588,6 @@ app.whenReady().then(async () => {
   latestSnapshotForWindowTitle = refreshed
   notifyDshUpdate(refreshed)
   await openPrimaryWindow()
-  setTimeout(() => { void desktopUpdater?.check() }, 4_000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void openPrimaryWindow()
@@ -695,7 +604,7 @@ app.on('before-quit', (event) => {
     quitApplication()
     return
   }
-  // Let application-menu, OS-session, and updater quits close tray-managed
+  // Let application-menu and OS-session quits close tray-managed
   // windows instead of being cancelled by their close-to-tray handlers.
   isQuitting = true
 })
@@ -710,17 +619,11 @@ function normalizeSystemLocale(locale: string): AppLocale {
 
 function mainCopy(locale: AppLocale) {
   if (locale === 'en-US') return {
-    versionManager: 'Version Manager…', about: 'About DSH Desktop', checkUpdates: 'Check for DSH Desktop Updates…',
+    versionManager: 'Version Manager…', about: 'About DSH Desktop',
     language: 'Language', edit: 'Edit', window: 'Window', hide: 'Hide DSH Desktop', hideOthers: 'Hide Others', quit: 'Quit DSH Desktop',
     undo: 'Undo', redo: 'Redo', cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select All', minimize: 'Minimize', zoom: 'Zoom',
     version: (version: string) => `Version ${version}`,
     credits: 'DeepSeek Harness community desktop client',
-    desktopUpdateTitle: (version: string) => `DSH Desktop ${version} is available`,
-    desktopUpdateBody: 'A new version is available.',
-    desktopUpdatePromptAuto: (version: string) => `Version ${version} is available. Update now to download and install automatically?`,
-    desktopUpdatePromptManual: (version: string) => `Version ${version} is available. Open GitHub Releases to download it manually.`,
-    promptUpdateNow: 'Update now',
-    promptUpdateLater: 'Later',
     dshUpdateTitle: (version: string) => `DSH ${version} is available`,
     dshUpdateBody: (version: string) => `You are still using ${version}. Click to open Version Manager.`,
     dshWindowUpdateTag: (version: string) => `Update Available: v${version}`,
@@ -729,17 +632,11 @@ function mainCopy(locale: AppLocale) {
     openHarness: 'Open Harness', openManager: 'Open Manager', startHarness: 'Start Harness', stopHarness: 'Stop Harness'
   }
   return {
-    versionManager: '版本管理…', about: '关于 DSH Desktop', checkUpdates: '检查 DSH Desktop 更新…',
+    versionManager: '版本管理…', about: '关于 DSH Desktop',
     language: '语言', edit: '编辑', window: '窗口', hide: '隐藏 DSH Desktop', hideOthers: '隐藏其他应用', quit: '退出 DSH Desktop',
     undo: '撤销', redo: '重做', cut: '剪切', copy: '复制', paste: '粘贴', selectAll: '全选', minimize: '最小化', zoom: '缩放',
     version: (version: string) => `版本 ${version}`,
     credits: 'DeepSeek Harness 社区桌面客户端',
-    desktopUpdateTitle: (version: string) => `DSH Desktop ${version} 可以更新`,
-    desktopUpdateBody: '已检测到新版本。',
-    desktopUpdatePromptAuto: (version: string) => `发现新版本 ${version}，是否立即下载并安装？`,
-    desktopUpdatePromptManual: (version: string) => `发现新版本 ${version}，点击前往 GitHub Releases 手动下载。`,
-    promptUpdateNow: '立即更新',
-    promptUpdateLater: '稍后',
     dshUpdateTitle: (version: string) => `DSH ${version} 可以安装`,
     dshUpdateBody: (version: string) => `当前继续使用 ${version}。点击打开版本管理。`,
     dshWindowUpdateTag: (version: string) => `发现更新: v${version}`,

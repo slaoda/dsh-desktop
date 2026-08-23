@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, AppUpdateSnapshot, BackupScope, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel } from '../shared/contracts'
 import deepSeekWhale from './deepseek-whale.svg'
 import { dshRuntimeFailureDetail, isDshRuntimeFailure } from './runtime-error'
 import './style.css'
@@ -14,9 +14,6 @@ const empty: AppSnapshot = {
   closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null,
   dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
 }
-const emptyAppUpdate: AppUpdateSnapshot = {
-  currentVersion: '0.1.0', availableVersion: null, delivery: 'manual', status: 'idle', percent: null, message: null
-}
 const repositoryUrl = 'https://github.com/qufei1993/dsh-desktop'
 
 type VersionFilter = 'all' | 'installed' | 'available'
@@ -28,7 +25,6 @@ function App(): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [showPrerelease, setShowPrerelease] = useState(true)
   const [progress, setProgress] = useState<InstallProgress | null>(null)
-  const [appUpdate, setAppUpdate] = useState(emptyAppUpdate)
   const [busyAction, setBusyAction] = useState<string | null>('initializing')
   const [message, setMessage] = useState(copy(initialLocale).readingState)
   const [errorDetailsExpanded, setErrorDetailsExpanded] = useState(false)
@@ -40,11 +36,9 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     void window.dshDesktop.getSnapshot().then((value) => { setSnapshot(value); setRegistryDraft(value.registryUrl); setProxyModeDraft(value.proxyMode); setProxyUrlDraft(value.manualProxyUrl ?? ''); document.documentElement.lang = value.locale; setMessage(copy(value.locale).ready); setBusyAction(null) })
-    void window.dshDesktop.getAppUpdate().then(setAppUpdate)
     const removeState = window.dshDesktop.onStateChanged(setSnapshot)
     const removeProgress = window.dshDesktop.onInstallProgress((value) => { setProgress(value); setMessage(value.message) })
-    const removeAppUpdate = window.dshDesktop.onAppUpdateChanged(setAppUpdate)
-    return () => { removeState(); removeProgress(); removeAppUpdate() }
+    return () => { removeState(); removeProgress() }
   }, [])
 
   useEffect(() => { setRegistryDraft(snapshot.registryUrl) }, [snapshot.registryUrl])
@@ -111,16 +105,6 @@ function App(): React.JSX.Element {
     } catch {
       setErrorCopyState('failed')
     }
-  }
-
-  const performAppUpdate = async (): Promise<void> => {
-    if (appUpdate.status === 'downloaded') {
-      await window.dshDesktop.installAppUpdate()
-      return
-    }
-    const action = appUpdate.status === 'available' ? window.dshDesktop.downloadAppUpdate : window.dshDesktop.checkAppUpdate
-    try { setAppUpdate(await action()) }
-    catch (error) { setAppUpdate((current) => ({ ...current, status: 'error', message: localizeMessage(snapshot.locale, error instanceof Error ? error.message : language.appUpdateFailed) })) }
   }
 
   const changeLocale = async (preference: LocalePreference): Promise<void> => {
@@ -195,7 +179,7 @@ function App(): React.JSX.Element {
       >
         {snapshot.locale === 'zh-CN' ? 'English' : '中文'}
       </button>
-      <div className={`desktop-version desktop-version-${appUpdate.status}`} title={appUpdateText(appUpdate, snapshot.locale)}>
+      <div className="desktop-version">
         <button
           type="button"
           className="desktop-repo-link"
@@ -203,26 +187,8 @@ function App(): React.JSX.Element {
           title={language.starOnGitHub}
           onClick={() => void window.dshDesktop.openExternal(repositoryUrl)}
         >
-          <strong>v{appUpdate.currentVersion}</strong>
+          <strong>v{snapshot.appVersion}</strong>
           <StarIcon />
-        </button>
-        <button
-          type="button"
-          className="desktop-update-button"
-          aria-label={appUpdateButtonText(appUpdate, snapshot.locale)}
-          title={`${appUpdateButtonText(appUpdate, snapshot.locale)}: ${appUpdateText(appUpdate, snapshot.locale)}`}
-          disabled={['checking', 'downloading', 'unsupported'].includes(appUpdate.status)}
-          onClick={() => void performAppUpdate()}
-        >
-          {appUpdate.status === 'downloading'
-            ? <small>{Math.round(appUpdate.percent ?? 0)}%</small>
-            : appUpdate.status === 'checking'
-              ? <RefreshIcon />
-              : appUpdate.status === 'available'
-                ? appUpdate.delivery === 'manual' ? <OpenIcon /> : <DownloadIcon />
-                : appUpdate.status === 'downloaded'
-                  ? <RestartIcon />
-                  : <RefreshIcon />}
         </button>
       </div>
     </header>
@@ -398,38 +364,10 @@ function externalSourceLabel(source: AppSnapshot['externalInstallations'][number
     : { environment: 'DSH_BIN', 'npm-global': 'Global npm', path: 'PATH', project: 'Project dependency' }
   return labels[source]
 }
-function appUpdateText(update: AppUpdateSnapshot, locale: AppLocale): string {
-  const language = copy(locale)
-  if (update.status === 'available') return update.delivery === 'manual'
-    ? language.newDesktopVersionManual(update.availableVersion ?? '')
-    : language.newDesktopVersion(update.availableVersion ?? '')
-  if (update.status === 'downloading') return language.downloadingDesktop(update.availableVersion ?? language.newVersion, Math.round(update.percent ?? 0))
-  if (update.status === 'downloaded') return language.desktopDownloaded(update.availableVersion ?? '')
-  if (update.status === 'checking') return language.checkingGitHub
-  if (update.status === 'up-to-date') return language.upToDate
-  if (update.status === 'error' || update.status === 'unsupported') return localizeMessage(locale, update.message ?? language.cannotCheckUpdates)
-  return language.independentUpdates
-}
-function appUpdateButtonText(update: AppUpdateSnapshot, locale: AppLocale): string {
-  const language = copy(locale)
-  if (update.status === 'available') return update.delivery === 'manual' ? language.openDownloadPage : language.downloadUpdate
-  if (update.status === 'downloading') return `${Math.round(update.percent ?? 0)}%`
-  if (update.status === 'downloaded') return language.restartInstall
-  if (update.status === 'checking') return language.checking
-  if (update.status === 'up-to-date' || update.status === 'error') return language.checkAgain
-  if (update.status === 'unsupported') return language.releaseOnly
-  return language.checkUpdates
-}
-
 function localizeMessage(locale: AppLocale, message: string): string {
   if (locale === 'zh-CN') return message
   const exact: Record<string, string> = {
     '正在读取本机状态…': 'Reading local state…', '准备就绪': 'Ready', '操作完成': 'Completed', '操作失败': 'Operation failed',
-    '应用更新失败': 'App update failed', '开发模式不检查应用更新': 'App updates are unavailable in development mode',
-    '当前已是最新版': 'You are up to date', '更新已下载，重启后安装': 'Update downloaded. Restart to install.',
-    '当前没有可下载的 DSH Desktop 更新': 'No DSH Desktop update is available to download', '更新尚未下载完成': 'The update has not finished downloading',
-    '此平台需要从 GitHub Releases 手动下载更新': 'Download the update manually from GitHub Releases on this platform', '此平台需要从 GitHub Releases 手动安装更新': 'Install the update manually from GitHub Releases on this platform',
-    '尚未发布可供自动更新的正式版本': 'No published release is currently available for automatic updates',
     '内置 Node.js 运行环境不可用': 'The bundled Node.js runtime is unavailable', '检查版本失败': 'Could not check versions',
     '已有 DSH 版本正在安装': 'Another DSH version is already being installed', '已有 DSH 版本操作正在进行': 'Another DSH version operation is in progress', '安装失败': 'Installation failed', '卸载失败': 'Uninstallation failed',
     '该版本不是用户安装的 DSH 版本': 'This DSH version was not installed by the user', '无法卸载当前使用的 DSH 版本，请先切换到其他版本': 'Switch to another DSH version before uninstalling the current version',
@@ -460,7 +398,7 @@ function localizeMessage(locale: AppLocale, message: string): string {
 
 function copy(locale: AppLocale) {
   if (locale === 'en-US') return {
-    readingState: 'Reading local state…', ready: 'Ready', completed: 'Completed', failed: 'Operation failed', appUpdateFailed: 'App update failed',
+    readingState: 'Reading local state…', ready: 'Ready', completed: 'Completed', failed: 'Operation failed',
     versionManager: 'Version Manager', communityClient: 'DeepSeek Harness community desktop client', switchToEnglish: 'Switch to English', switchToChinese: '切换为中文', starOnGitHub: 'View on GitHub and star the project',
     currentDshVersion: 'Current DSH version', currentlyUsing: 'Currently using', dshNotInstalled: 'DSH is not installed', current: 'Current', bundled: 'Bundled', updateAvailable: 'Update available',
     quickUpdateAction: (version: string) => `Update to v${version}`, quickSwitching: (version: string) => `Switching to v${version}…`, quickInstalling: (version: string) => `Installing and switching to v${version}…`, quickUpdateTooltip: (version: string) => `A new DeepSeek Harness ${version} is available. Click to install and switch with backup and rollback protection.`, quickUpdateBusy: 'Checking DSH update',
@@ -479,13 +417,10 @@ function copy(locale: AppLocale) {
     noMatchingVersions: 'No matching versions', refreshEmpty: 'Refresh to load versions from the official npm registry.', adjustFilters: 'Try adjusting the filters or search.', unknown: 'Unknown', unknownPublishDate: 'Publish date unknown',
     notRunning: 'Not running', starting: 'Starting', dshRunning: 'DSH running', stopping: 'Stopping', runtimeError: 'Runtime error',
     dshStartupFailed: 'Official DSH failed to start', dshStartupFailedSummary: 'This version returned an error. Expand details to see the cause.', copyError: 'Copy error', errorCopied: 'Copied', errorCopyFailed: 'Copy failed', viewDetails: 'View details', hideDetails: 'Hide details',
-    officialErrorBoundary: 'These startup details came from official DSH. DSH Desktop did not modify your configuration or credentials.',
-    newDesktopVersion: (version: string) => `Version ${version} is available. You decide whether to upgrade.`, newDesktopVersionManual: (version: string) => `Version ${version} is available. Open GitHub Releases to download it.`, newVersion: 'new version', downloadingDesktop: (version: string, percent: number) => `Downloading ${version} · ${percent}%`,
-    desktopDownloaded: (version: string) => `${version} downloaded. Restart to install.`, checkingGitHub: 'Checking GitHub Releases for updates…', upToDate: 'You are up to date', cannotCheckUpdates: 'Unable to check for updates',
-    independentUpdates: 'DSH Desktop updates come from GitHub Releases and are separate from official DSH versions', downloadUpdate: 'Download update', openDownloadPage: 'Open GitHub download page', restartInstall: 'Restart and install', checking: 'Checking…', checkAgain: 'Check again', releaseOnly: 'Available in release builds only', checkUpdates: 'Check for updates'
+    officialErrorBoundary: 'These startup details came from official DSH. DSH Desktop did not modify your configuration or credentials.'
   }
   return {
-    readingState: '正在读取本机状态…', ready: '准备就绪', completed: '操作完成', failed: '操作失败', appUpdateFailed: '应用更新失败',
+    readingState: '正在读取本机状态…', ready: '准备就绪', completed: '操作完成', failed: '操作失败',
     versionManager: '版本管理', communityClient: 'DeepSeek Harness 社区桌面客户端', switchToEnglish: '切换为英文', switchToChinese: '切换为中文', starOnGitHub: '在 GitHub 查看并 Star 项目',
     currentDshVersion: '当前 DSH 版本', currentlyUsing: '当前使用', dshNotInstalled: '尚未安装 DSH', current: '当前', bundled: '随应用提供', updateAvailable: '可更新',
     quickUpdateAction: (version: string) => `更新到 v${version}`, quickSwitching: (version: string) => `正在切换到 v${version}…`, quickInstalling: (version: string) => `正在安装并切换到 v${version}…`, quickUpdateTooltip: (version: string) => `发现 DeepSeek Harness ${version}，点击安装并切换，全程受备份和回滚保护。`, quickUpdateBusy: '正在检查 DSH 更新',
@@ -504,10 +439,7 @@ function copy(locale: AppLocale) {
     noMatchingVersions: '没有符合条件的版本', refreshEmpty: '点击右上角刷新，从 npm 官方源获取版本。', adjustFilters: '试试调整筛选或搜索内容。', unknown: '未知', unknownPublishDate: '发布时间未知',
     notRunning: '未运行', starting: '启动中', dshRunning: 'DSH 运行中', stopping: '停止中', runtimeError: '运行异常',
     dshStartupFailed: '官方 DSH 启动失败', dshStartupFailedSummary: '当前版本返回了错误，展开详情可查看具体原因。', copyError: '复制错误', errorCopied: '已复制', errorCopyFailed: '复制失败', viewDetails: '查看详情', hideDetails: '收起详情',
-    officialErrorBoundary: '以上为官方 DSH 的启动失败详情，DSH Desktop 未修改你的配置或凭据。',
-    newDesktopVersion: (version: string) => `发现新版 ${version}，是否升级由你决定`, newDesktopVersionManual: (version: string) => `发现新版 ${version}，请前往 GitHub Releases 下载`, newVersion: '新版', downloadingDesktop: (version: string, percent: number) => `正在下载 ${version} · ${percent}%`,
-    desktopDownloaded: (version: string) => `${version} 已下载，重启后安装`, checkingGitHub: '正在从 GitHub Releases 检查更新…', upToDate: '当前已是最新版', cannotCheckUpdates: '暂时无法检查更新',
-    independentUpdates: 'DSH Desktop 更新来自 GitHub Releases，与官方 DSH 版本独立', downloadUpdate: '下载更新', openDownloadPage: '打开 GitHub 下载页', restartInstall: '重启并安装', checking: '检查中…', checkAgain: '再次检查', releaseOnly: '仅正式版可用', checkUpdates: '检查更新'
+    officialErrorBoundary: '以上为官方 DSH 的启动失败详情，DSH Desktop 未修改你的配置或凭据。'
   }
 }
 
@@ -518,7 +450,6 @@ const DownloadIcon = (): React.JSX.Element => <Svg><path d="M12 3v12m0 0 4-4m-4 
 const TrashIcon = (): React.JSX.Element => <Svg><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></Svg>
 const SearchIcon = (): React.JSX.Element => <Svg><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></Svg>
 const RefreshIcon = (): React.JSX.Element => <Svg><path d="M20 7v5h-5M4 17v-5h5"/><path d="M18.1 9A7 7 0 0 0 6 6.5L4 12m16 0-2 5.5A7 7 0 0 1 5.9 15"/></Svg>
-const RestartIcon = (): React.JSX.Element => <Svg><path d="M20 6v5h-5"/><path d="M18.2 9A7.5 7.5 0 1 0 19 15"/></Svg>
 const StarIcon = (): React.JSX.Element => <Svg><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></Svg>
 const OpenIcon = (): React.JSX.Element => <Svg><path d="M14 4h6v6m0-6-9 9"/><path d="M19 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></Svg>
 const ShieldIcon = (): React.JSX.Element => <Svg><path d="M12 3 5 6v5c0 4.5 2.8 7.8 7 10 4.2-2.2 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></Svg>

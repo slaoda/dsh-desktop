@@ -24,16 +24,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(65,118,230,.
 .desktop-repo-link svg { width: 13px; height: 13px; transition: color .15s ease, fill .15s ease, transform .15s ease; }
 .desktop-repo-link:hover { color: #9a7217; border-color: #ead89e; background: #fff9e8; }
 .desktop-repo-link:hover svg { color: #c79319; fill: #f6c94f; transform: rotate(-8deg) scale(1.08); }
-.desktop-update-button { display: grid; place-items: center; width: 25px; height: 25px; padding: 0; border: 0; border-radius: 7px; color: #777f89; background: transparent; cursor: pointer; transition: color .15s ease, background .15s ease; }
-.desktop-update-button:hover:not(:disabled) { color: var(--forest); background: #e8effc; }
-.desktop-update-button:disabled { cursor: wait; opacity: .68; }
-.desktop-update-button svg { width: 14px; height: 14px; }
-.desktop-update-button small { font-size: 8px; font-weight: 750; }
-.desktop-version-checking .desktop-update-button svg { animation: spin .9s linear infinite; }
-.desktop-version-available .desktop-update-button { color: #fff; background: var(--forest); box-shadow: 0 3px 9px rgba(65,118,230,.22); }
-.desktop-version-available .desktop-update-button:hover:not(:disabled) { color: #fff; background: #315eaf; }
-.desktop-version-downloading .desktop-update-button { width: 31px; color: #315eaf; background: #e4edfd; }
-.desktop-version-downloaded .desktop-update-button { color: #17623d; background: #e6faed; }
 .runtime-pill { display: flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid #dddcd5; border-radius: 999px; color: #69716b; background: rgba(255,255,255,.6); font-size: 11px; font-weight: 650; }
 .runtime-pill i { width: 6px; height: 6px; border-radius: 50%; background: #9aa19b; }
 .runtime-running { color: #17623d; border-color: #c7ddcd; background: #e6faed; }
@@ -187,7 +177,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(65,118,230,.
 .footer span:first-child { overflow: hidden; color: #61666b; text-overflow: ellipsis; white-space: nowrap; }
 .error-message { color: var(--danger) !important; }
 @keyframes pulse { 50% { opacity: .35; } }
-@keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 820px) {
   .app-shell { padding: 24px; } .library { grid-template-columns: 170px minmax(0,1fr); }
   .current-card { padding: 21px; } .current-orbit { display: none; }

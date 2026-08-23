@@ -43,7 +43,6 @@
     "package:win:x64": "npm run prepare:runtime && npm run build && electron-builder --win --x64 --publish never && npm run release:metadata"
   },
   "dependencies": {
-    "electron-updater": "6.8.9",
     "pnpm": "11.22.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -111,12 +110,6 @@
         "to": "ui/version-manager.png"
       }
     ],
-    "publish": {
-      "provider": "github",
-      "owner": "qufei1993",
-      "repo": "dsh-desktop",
-      "releaseType": "release"
-    },
     "win": {
       "icon": "build/icon.ico",
       "target": "nsis",

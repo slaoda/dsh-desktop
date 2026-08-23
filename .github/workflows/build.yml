@@ -62,7 +62,6 @@ jobs:
           name: dsh-desktop-windows-x64
           path: |
             release/*.exe
-            release/latest.yml
           if-no-files-found: error
       - name: Upload build artifacts (retry)
         if: failure() && steps.upload-artifacts-v4.outcome == 'failure'
@@ -72,7 +71,6 @@ jobs:
           name: dsh-desktop-windows-x64
           path: |
             release/*.exe
-            release/latest.yml
           if-no-files-found: error
 
   release:
@@ -107,4 +105,3 @@ jobs:
           overwrite_files: true
           files: |
             release/*.exe
-            release/latest.yml

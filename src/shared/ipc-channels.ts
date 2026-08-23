@@ -20,10 +20,5 @@ export const channels = {
   setNetworkPreferences: 'desktop:set-network-preferences',
   openDiagnosticsDirectory: 'desktop:open-diagnostics-directory',
   stateChanged: 'dsh:state-changed',
-  installProgress: 'dsh:install-progress',
-  appUpdateSnapshot: 'desktop-update:snapshot',
-  appUpdateCheck: 'desktop-update:check',
-  appUpdateDownload: 'desktop-update:download',
-  appUpdateInstall: 'desktop-update:install',
-  appUpdateChanged: 'desktop-update:changed'
+  installProgress: 'dsh:install-progress'
 } as const

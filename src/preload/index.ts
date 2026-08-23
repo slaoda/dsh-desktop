@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { channels } from '../shared/ipc-channels'
-import type { AppSnapshot, AppUpdateSnapshot, BackupScope, DesktopApi, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel } from '../shared/contracts'
+import type { AppSnapshot, BackupScope, DesktopApi, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel } from '../shared/contracts'
 
 const api: DesktopApi = {
   getSnapshot: () => ipcRenderer.invoke(channels.snapshot),
@@ -23,10 +23,6 @@ const api: DesktopApi = {
   setDesktopPreferences: (closeToTray: boolean, startAtLogin: boolean) => ipcRenderer.invoke(channels.setDesktopPreferences, closeToTray, startAtLogin),
   setNetworkPreferences: (mode: ProxyMode, manualProxyUrl: string | null) => ipcRenderer.invoke(channels.setNetworkPreferences, mode, manualProxyUrl),
   openDiagnosticsDirectory: () => ipcRenderer.invoke(channels.openDiagnosticsDirectory),
-  getAppUpdate: () => ipcRenderer.invoke(channels.appUpdateSnapshot),
-  checkAppUpdate: () => ipcRenderer.invoke(channels.appUpdateCheck),
-  downloadAppUpdate: () => ipcRenderer.invoke(channels.appUpdateDownload),
-  installAppUpdate: () => ipcRenderer.invoke(channels.appUpdateInstall),
   onStateChanged: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, snapshot: AppSnapshot): void => listener(snapshot)
     ipcRenderer.on(channels.stateChanged, handler)
@@ -36,11 +32,6 @@ const api: DesktopApi = {
     const handler = (_event: Electron.IpcRendererEvent, progress: InstallProgress): void => listener(progress)
     ipcRenderer.on(channels.installProgress, handler)
     return () => ipcRenderer.removeListener(channels.installProgress, handler)
-  },
-  onAppUpdateChanged: (listener) => {
-    const handler = (_event: Electron.IpcRendererEvent, snapshot: AppUpdateSnapshot): void => listener(snapshot)
-    ipcRenderer.on(channels.appUpdateChanged, handler)
-    return () => ipcRenderer.removeListener(channels.appUpdateChanged, handler)
   }
 }
 

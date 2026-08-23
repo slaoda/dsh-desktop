@@ -121,7 +121,7 @@ try {
   await electronApp.evaluate(({ app, Menu }) => {
     if (app.name !== 'DSH Desktop') throw new Error(`应用名称不正确：${app.name}`)
     if (!Menu.getApplicationMenu()?.getMenuItemById('about-dsh-desktop')) throw new Error('关于菜单不存在')
-    if (!Menu.getApplicationMenu()?.getMenuItemById('check-for-updates')) throw new Error('应用更新菜单不存在')
+    if (Menu.getApplicationMenu()?.getMenuItemById('check-for-updates')) throw new Error('已停用的应用更新菜单仍然存在')
     const item = Menu.getApplicationMenu()?.getMenuItemById('version-manager')
     if (!item?.click) throw new Error('版本管理菜单不存在')
     if (!item.icon || (typeof item.icon !== 'string' && item.icon.isEmpty())) throw new Error('版本管理菜单图标不存在')
