@@ -22,6 +22,9 @@ export const clipboardTextSchema = z.string().min(1).max(4_096)
 export const backupScopeSchema = z.enum(['configuration', 'full'])
 export const backupIdSchema = z.string().regex(/^\d{8}T\d{9}Z-[0-9a-f]{8}$/)
 export const externalInstallationIdSchema = z.string().regex(/^[0-9a-f]{16}$/)
+export const repairModeSchema = z.enum(['auto', 'ask', 'diagnose'])
+export const pluginEntryIdSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:@/-]*$/)
+export const pluginPackageNameSchema = z.string().min(1).max(214).regex(/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i)
 export const proxyModeSchema = z.enum(['system', 'manual'])
 export const proxyUrlSchema = z.string().trim().min(1).max(2_048).superRefine((value, context) => {
   try {
@@ -42,6 +45,56 @@ export type ReleaseChannel = z.infer<typeof releaseChannelSchema>
 export type BackupScope = z.infer<typeof backupScopeSchema>
 export type BackupReason = 'manual' | 'update' | 'pre-restore'
 export type ProxyMode = z.infer<typeof proxyModeSchema>
+export type RepairMode = z.infer<typeof repairModeSchema>
+
+export type RepairCategory =
+  | 'plugin-conflict'
+  | 'plugin-missing'
+  | 'plugin-config'
+  | 'managed-install-corrupt'
+  | 'stale-process'
+  | 'runtime-unhealthy'
+  | 'sensitive-config'
+  | 'external-installation'
+  | 'unknown'
+
+export type RepairConfidence = 'high' | 'medium' | 'low'
+
+export type RepairAction =
+  | {
+    kind: 'quarantine-plugin'
+    entryId: string
+    packageName: string | null
+    reversible: true
+    requiresConfirmation: false
+  }
+  | {
+    kind: 'quarantine-config-layer'
+    layer: 'profile' | 'home'
+    reversible: true
+    requiresConfirmation: true
+  }
+  | {
+    kind: 'reinstall-managed-version'
+    version: string
+    reversible: true
+    requiresConfirmation: false
+  }
+
+export interface RepairCandidate {
+  entryId?: string
+  packageName?: string
+  layer?: 'profile' | 'home'
+}
+
+export interface RepairDiagnosis {
+  category: RepairCategory
+  confidence: RepairConfidence
+  summary: string
+  evidence: string[]
+  candidate: RepairCandidate | null
+  action: RepairAction | null
+}
 
 export interface BackupSummary {
   id: string
