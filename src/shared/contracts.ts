@@ -7,10 +7,23 @@ export const bundledDshVersion = '0.1.0-rc.6' as const
 
 export const exactVersionSchema = z.string().min(1).max(80).regex(/^[0-9A-Za-z][0-9A-Za-z.+-]*$/).refine((value) => semver.valid(value) !== null)
 export const localePreferenceSchema = z.enum(['system', 'zh-CN', 'en-US'])
+export const releaseChannelSchema = z.enum(['stable', 'preview', 'all'])
+export const registryUrlSchema = z.string().trim().min(1).max(2_048).superRefine((value, context) => {
+  try {
+    const url = new URL(value)
+    if (!['http:', 'https:'].includes(url.protocol)) context.addIssue({ code: 'custom', message: '镜像地址必须使用 HTTP 或 HTTPS' })
+    if (url.username || url.password) context.addIssue({ code: 'custom', message: '镜像地址不能包含用户名或密码' })
+    if (url.search || url.hash) context.addIssue({ code: 'custom', message: '镜像地址不能包含查询参数或片段' })
+  } catch {
+    context.addIssue({ code: 'custom', message: '镜像地址格式无效' })
+  }
+}).transform((value) => value.replace(/\/+$/, ''))
 export const clipboardTextSchema = z.string().min(1).max(4_096)
+export const defaultRegistryUrl = 'https://registry.npmjs.org' as const
 
 export type AppLocale = 'zh-CN' | 'en-US'
 export type LocalePreference = z.infer<typeof localePreferenceSchema>
+export type ReleaseChannel = z.infer<typeof releaseChannelSchema>
 
 export function resolveLocale(preference: LocalePreference, systemLocale: AppLocale): AppLocale {
   return preference === 'system' ? systemLocale : preference
@@ -32,6 +45,8 @@ export interface AppSnapshot {
   appVersion: string
   locale: AppLocale
   localePreference: LocalePreference
+  releaseChannel: ReleaseChannel
+  registryUrl: string
   nodeVersion: string | null
   latestVersion: string | null
   selectedVersion: string | null
@@ -73,6 +88,7 @@ export interface DesktopApi {
   openExternal(url: string): Promise<void>
   copyText(text: string): Promise<void>
   setLocale(preference: LocalePreference): Promise<AppSnapshot>
+  setVersionPreferences(channel: ReleaseChannel, registryUrl: string): Promise<AppSnapshot>
   getAppUpdate(): Promise<AppUpdateSnapshot>
   checkAppUpdate(): Promise<AppUpdateSnapshot>
   downloadAppUpdate(): Promise<AppUpdateSnapshot>

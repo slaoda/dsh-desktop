@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, InstallProgress, LocalePreference, OfficialVersion } from '../shared/contracts'
-import { exactVersionSchema, localePreferenceSchema, resolveLocale } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, InstallProgress, LocalePreference, OfficialVersion, ReleaseChannel } from '../shared/contracts'
+import { defaultRegistryUrl, exactVersionSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, resolveLocale } from '../shared/contracts'
 import { runProcess } from './process-utils'
 import { DshRegistry } from './registry'
 import type { RuntimePaths } from './runtime-paths'
@@ -10,7 +10,10 @@ import { DshSupervisor } from './dsh-supervisor'
 import { VersionManager } from './version-manager'
 
 export class AppController extends EventEmitter {
-  private state: PersistedState = { schemaVersion: 1, selectedVersion: null, dismissedLatest: null, localePreference: 'system' }
+  private state: PersistedState = {
+    schemaVersion: 2, selectedVersion: null, dismissedLatest: null, localePreference: 'system',
+    releaseChannel: 'all', registryUrl: defaultRegistryUrl
+  }
   private latestVersion: string | null = null
   private availableVersions: OfficialVersion[] = []
   private nodeVersion: string | null = null
@@ -45,7 +48,7 @@ export class AppController extends EventEmitter {
 
   async refresh(): Promise<AppSnapshot> {
     try {
-      const catalog = await this.registry.catalog()
+      const catalog = await this.registry.catalog({ channel: this.state.releaseChannel, registryUrl: this.state.registryUrl })
       this.latestVersion = catalog.latest
       this.availableVersions = catalog.versions
       this.error = null
@@ -62,11 +65,11 @@ export class AppController extends EventEmitter {
     this.versionOperationInProgress = true
     try {
       if (this.availableVersions.length === 0) {
-        const catalog = await this.registry.catalog()
+        const catalog = await this.registry.catalog({ channel: this.state.releaseChannel, registryUrl: this.state.registryUrl })
         this.latestVersion = catalog.latest
         this.availableVersions = catalog.versions
       }
-      await this.versions.install(version, this.availableVersions.map((item) => item.version), (progress) => this.emit('progress', progress))
+      await this.versions.install(version, this.availableVersions.map((item) => item.version), (progress) => this.emit('progress', progress), this.state.registryUrl)
       if (!this.state.selectedVersion) {
         this.state.selectedVersion = version
         await this.store.write(this.state)
@@ -143,6 +146,15 @@ export class AppController extends EventEmitter {
     return await this.emitSnapshot()
   }
 
+  async setVersionPreferences(channel: ReleaseChannel, registryUrl: string): Promise<AppSnapshot> {
+    this.state.releaseChannel = releaseChannelSchema.parse(channel)
+    this.state.registryUrl = registryUrlSchema.parse(registryUrl)
+    await this.store.write(this.state)
+    this.latestVersion = null
+    this.availableVersions = []
+    return await this.refresh()
+  }
+
   isRuntimeActive(): boolean {
     return !['idle', 'failed'].includes(this.supervisor.status)
   }
@@ -158,6 +170,8 @@ export class AppController extends EventEmitter {
       appVersion: this.appVersion,
       locale: resolveLocale(this.state.localePreference, this.systemLocale),
       localePreference: this.state.localePreference,
+      releaseChannel: this.state.releaseChannel,
+      registryUrl: this.state.registryUrl,
       nodeVersion: this.nodeVersion,
       latestVersion: this.latestVersion,
       selectedVersion: this.state.selectedVersion,

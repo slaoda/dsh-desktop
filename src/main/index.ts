@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, net,
 import electronUpdater from 'electron-updater'
 import path from 'node:path'
 import semver from 'semver'
-import { channels, clipboardTextSchema, exactVersionSchema, localePreferenceSchema, type AppLocale, type AppSnapshot, type AppUpdateSnapshot, type InstallProgress, type LocalePreference } from '../shared/contracts'
+import { channels, clipboardTextSchema, exactVersionSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, type AppLocale, type AppSnapshot, type AppUpdateSnapshot, type InstallProgress, type LocalePreference } from '../shared/contracts'
 import { DesktopUpdater } from './app-updater'
 import { applyNetworkProxy, configureNetworkProxy } from './network-proxy'
 import { AppController } from './controller'
@@ -466,6 +466,10 @@ function registerIpc(instance: AppController): void {
   ipcMain.handle(channels.setLocale, async (event, raw: unknown) => {
     assertManager(event)
     return await instance.setLocale(localePreferenceSchema.parse(raw))
+  })
+  ipcMain.handle(channels.setVersionPreferences, async (event, rawChannel: unknown, rawRegistryUrl: unknown) => {
+    assertManager(event)
+    return await instance.setVersionPreferences(releaseChannelSchema.parse(rawChannel), registryUrlSchema.parse(rawRegistryUrl))
   })
   ipcMain.handle(channels.appUpdateSnapshot, (event) => {
     assertManager(event)

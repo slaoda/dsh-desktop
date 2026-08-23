@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { exactVersionSchema, officialPackageName, type InstallProgress, type InstalledVersion } from '../shared/contracts'
+import { defaultRegistryUrl, exactVersionSchema, officialPackageName, registryUrlSchema, type InstallProgress, type InstalledVersion } from '../shared/contracts'
 import type { RuntimePaths } from './runtime-paths'
 import { npmProxyEnvironment } from './network-proxy'
 import { prependRuntimePath } from './runtime-path-environment'
@@ -87,8 +87,9 @@ export class VersionManager {
     return await this.resolveAt(path.join(this.bundledDir, version), version, 'bundled')
   }
 
-  async install(version: string, availableVersions: string[], progress: (value: InstallProgress) => void): Promise<void> {
+  async install(version: string, availableVersions: string[], progress: (value: InstallProgress) => void, registryUrl: string = defaultRegistryUrl): Promise<void> {
     exactVersionSchema.parse(version)
+    const validatedRegistryUrl = registryUrlSchema.parse(registryUrl)
     if (!availableVersions.includes(version)) throw new Error('该版本不在官方 npm 版本目录中')
     await mkdir(this.versionsDir, { recursive: true })
     const destination = path.join(this.versionsDir, version)
@@ -107,7 +108,7 @@ export class VersionManager {
         writeFile(path.join(staging, 'pnpm-workspace.yaml'), pnpmBuildPolicy)
       ])
       progress({ version, phase: 'downloading', message: `正在安装官方 DSH ${version}` })
-      await this.runPnpmInstall(staging, version, progress)
+      await this.runPnpmInstall(staging, version, progress, validatedRegistryUrl)
       progress({ version, phase: 'validating', message: '正在校验官方包版本和入口' })
       await this.resolveAt(staging, version, 'installed')
       await rename(staging, destination)
@@ -127,14 +128,14 @@ export class VersionManager {
     await rm(destination, { recursive: true, force: true })
   }
 
-  private async runPnpmInstall(prefix: string, version: string, progress: (value: InstallProgress) => void): Promise<void> {
+  private async runPnpmInstall(prefix: string, version: string, progress: (value: InstallProgress) => void, registryUrl: string): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const child = spawn(this.runtime.node, [
         this.runtime.pnpmCli,
         'install',
         '--dir', prefix,
         '--prefer-offline',
-        '--registry=https://registry.npmjs.org/',
+        `--registry=${registryUrl}`,
         '--reporter=append-only'
       ], {
         env: {

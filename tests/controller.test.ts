@@ -39,5 +39,7 @@ describe('AppController', () => {
     await expect(controller.uninstall('1.1.0')).rejects.toThrow('无法卸载当前使用')
     expect((await controller.uninstall('1.0.0')).installedVersions.map((item) => item.version)).toEqual(['1.1.0'])
     expect((await controller.setLocale('en-US'))).toMatchObject({ locale: 'en-US', localePreference: 'en-US' })
+    const stable = await controller.setVersionPreferences('stable', 'https://registry.example.test/npm')
+    expect(stable).toMatchObject({ releaseChannel: 'stable', registryUrl: 'https://registry.example.test/npm', latestVersion: '1.1.0' })
   })
 })

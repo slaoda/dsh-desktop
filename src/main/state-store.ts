@@ -1,20 +1,24 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import writeFileAtomic from 'write-file-atomic'
-import type { LocalePreference } from '../shared/contracts'
+import { defaultRegistryUrl, registryUrlSchema, releaseChannelSchema, type LocalePreference, type ReleaseChannel } from '../shared/contracts'
 
 export interface PersistedState {
-  schemaVersion: 1
+  schemaVersion: 2
   selectedVersion: string | null
   dismissedLatest: string | null
   localePreference: LocalePreference
+  releaseChannel: ReleaseChannel
+  registryUrl: string
 }
 
 const defaults: PersistedState = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   selectedVersion: null,
   dismissedLatest: null,
-  localePreference: 'system'
+  localePreference: 'system',
+  releaseChannel: 'all',
+  registryUrl: defaultRegistryUrl
 }
 
 export class StateStore {
@@ -28,10 +32,12 @@ export class StateStore {
     try {
       const parsed = JSON.parse(await readFile(this.file, 'utf8')) as Partial<PersistedState>
       return {
-        schemaVersion: 1,
+        schemaVersion: 2,
         selectedVersion: typeof parsed.selectedVersion === 'string' ? parsed.selectedVersion : null,
         dismissedLatest: typeof parsed.dismissedLatest === 'string' ? parsed.dismissedLatest : null,
-        localePreference: ['system', 'zh-CN', 'en-US'].includes(parsed.localePreference ?? '') ? parsed.localePreference as LocalePreference : 'system'
+        localePreference: ['system', 'zh-CN', 'en-US'].includes(parsed.localePreference ?? '') ? parsed.localePreference as LocalePreference : 'system',
+        releaseChannel: releaseChannelSchema.safeParse(parsed.releaseChannel).success ? parsed.releaseChannel as ReleaseChannel : 'all',
+        registryUrl: registryUrlSchema.safeParse(parsed.registryUrl).success ? registryUrlSchema.parse(parsed.registryUrl) : defaultRegistryUrl
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error

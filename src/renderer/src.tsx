@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, AppUpdateSnapshot, InstallProgress, LocalePreference } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, AppUpdateSnapshot, InstallProgress, LocalePreference, ReleaseChannel } from '../shared/contracts'
 import deepSeekWhale from './deepseek-whale.svg'
 import { dshRuntimeFailureDetail, isDshRuntimeFailure } from './runtime-error'
 import './style.css'
@@ -9,7 +9,8 @@ import './style.css'
 const initialLocale: AppLocale = navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US'
 const empty: AppSnapshot = {
   appVersion: '0.1.0', nodeVersion: null, latestVersion: null, selectedVersion: null,
-  locale: initialLocale, localePreference: 'system', dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
+  locale: initialLocale, localePreference: 'system', releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org',
+  dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
 }
 const emptyAppUpdate: AppUpdateSnapshot = {
   currentVersion: '0.1.0', availableVersion: null, delivery: 'manual', status: 'idle', percent: null, message: null
@@ -30,16 +31,19 @@ function App(): React.JSX.Element {
   const [message, setMessage] = useState(copy(initialLocale).readingState)
   const [errorDetailsExpanded, setErrorDetailsExpanded] = useState(false)
   const [errorCopyState, setErrorCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [registryDraft, setRegistryDraft] = useState(empty.registryUrl)
   const language = copy(snapshot.locale)
 
   useEffect(() => {
-    void window.dshDesktop.getSnapshot().then((value) => { setSnapshot(value); document.documentElement.lang = value.locale; setMessage(copy(value.locale).ready); setBusyAction(null) })
+    void window.dshDesktop.getSnapshot().then((value) => { setSnapshot(value); setRegistryDraft(value.registryUrl); document.documentElement.lang = value.locale; setMessage(copy(value.locale).ready); setBusyAction(null) })
     void window.dshDesktop.getAppUpdate().then(setAppUpdate)
     const removeState = window.dshDesktop.onStateChanged(setSnapshot)
     const removeProgress = window.dshDesktop.onInstallProgress((value) => { setProgress(value); setMessage(value.message) })
     const removeAppUpdate = window.dshDesktop.onAppUpdateChanged(setAppUpdate)
     return () => { removeState(); removeProgress(); removeAppUpdate() }
   }, [])
+
+  useEffect(() => { setRegistryDraft(snapshot.registryUrl) }, [snapshot.registryUrl])
 
   useEffect(() => {
     setErrorDetailsExpanded(false)
@@ -119,6 +123,10 @@ function App(): React.JSX.Element {
     setSnapshot(next)
     document.documentElement.lang = next.locale
     setMessage(copy(next.locale).ready)
+  }
+
+  const changeVersionPreferences = async (channel: ReleaseChannel, registryUrl: string): Promise<void> => {
+    await perform('version-preferences', language.savingVersionPreferences, () => window.dshDesktop.setVersionPreferences(channel, registryUrl))
   }
 
   const quickUpdateHarness = async (): Promise<void> => {
@@ -260,6 +268,11 @@ function App(): React.JSX.Element {
         <div className="source-block">
           <span className="side-heading">{language.versionSource}</span>
           <div className="source-row"><NpmIcon /><span><strong>{language.officialNpm}</strong><small>@deepseek-ai/dsh</small></span></div>
+          <label className="registry-settings">
+            <span>{language.registryAddress}</span>
+            <input value={registryDraft} onChange={(event) => setRegistryDraft(event.target.value)} aria-label={language.registryAddress} />
+            <button type="button" disabled={busyAction !== null || registryDraft === snapshot.registryUrl} onClick={() => void changeVersionPreferences(snapshot.releaseChannel, registryDraft)}>{language.save}</button>
+          </label>
         </div>
         <div className="boundary-note"><ShieldIcon /><span>{language.onlyOfficialLine1}<br />{language.onlyOfficialLine2}</span></div>
       </aside>
@@ -267,6 +280,7 @@ function App(): React.JSX.Element {
       <div className="version-content">
         <div className="toolbar">
           <label className="search"><SearchIcon /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={language.searchVersion} aria-label={language.searchVersion} /></label>
+          <label className="channel-picker"><span>{language.releaseChannel}</span><select value={snapshot.releaseChannel} disabled={busyAction !== null} onChange={(event) => void changeVersionPreferences(event.target.value as ReleaseChannel, snapshot.registryUrl)}><option value="stable">{language.stable}</option><option value="preview">{language.preview}</option><option value="all">{language.allChannels}</option></select></label>
           <label className="toggle-label"><input type="checkbox" checked={showPrerelease} onChange={(event) => setShowPrerelease(event.target.checked)} /><span className="toggle" />{language.showPrerelease}</label>
           <button className="icon-button" title={language.refreshVersions} aria-label={language.refreshVersions} disabled={busyAction !== null} onClick={() => void perform('refresh', language.syncingVersions, window.dshDesktop.refresh)}><RefreshIcon /></button>
         </div>
@@ -389,6 +403,7 @@ function copy(locale: AppLocale) {
     officialFeaturesUnchanged: 'Launched by DSH Desktop. Official features and data remain unchanged.', stop: 'Stop', openDsh: 'Open DSH', startDsh: 'Start DSH', stoppingDsh: 'Stopping DSH…', openingDsh: 'Opening DSH…', startingDsh: 'Starting DSH…',
     versionFilters: 'Version filters', versions: 'Versions', allVersions: 'All versions', installed: 'Installed', available: 'Available', installedVersions: 'Installed versions', availableVersions: 'Available versions',
     versionSource: 'Version source', officialNpm: 'Official npm registry', officialNpmShort: 'Official npm', onlyOfficialLine1: 'Installs and runs only', onlyOfficialLine2: 'official DSH packages',
+    registryAddress: 'Registry address', save: 'Save', releaseChannel: 'Channel', stable: 'Stable', preview: 'Preview', allChannels: 'All', savingVersionPreferences: 'Saving version source settings…',
     searchVersion: 'Search versions', showPrerelease: 'Show prereleases', refreshVersions: 'Refresh official versions', syncingVersions: 'Syncing official npm versions…',
     versionCount: (count: number) => `${count} version${count === 1 ? '' : 's'}`, latest: 'Latest', inUse: 'In use', switching: 'Switching…', switch: 'Switch', installing: 'Installing…', install: 'Install', uninstalling: 'Uninstalling…', uninstall: 'Uninstall',
     switchingTo: (version: string) => `Switching to ${version}…`, installingVersion: (version: string) => `Installing ${version}…`, uninstallingVersion: (version: string) => `Uninstalling ${version}…`,
@@ -408,6 +423,7 @@ function copy(locale: AppLocale) {
     officialFeaturesUnchanged: '由 DSH Desktop 启动，官方功能和数据保持原样。', stop: '停止', openDsh: '打开 DSH', startDsh: '启动 DSH', stoppingDsh: '正在停止 DSH…', openingDsh: '正在打开 DSH…', startingDsh: '正在启动 DSH…',
     versionFilters: '版本筛选', versions: '版本', allVersions: '全部版本', installed: '已安装', available: '可安装', installedVersions: '已安装版本', availableVersions: '可安装版本',
     versionSource: '版本来源', officialNpm: 'npm 官方源', officialNpmShort: '官方 npm', onlyOfficialLine1: '仅安装并运行', onlyOfficialLine2: '官方 DSH 包',
+    registryAddress: '镜像地址', save: '保存', releaseChannel: '渠道', stable: '稳定版', preview: '预览版', allChannels: '全部', savingVersionPreferences: '正在保存版本源设置…',
     searchVersion: '搜索版本号', showPrerelease: '显示预发布版本', refreshVersions: '刷新官方版本', syncingVersions: '正在同步 npm 官方版本…',
     versionCount: (count: number) => `${count} 个版本`, latest: '最新', inUse: '使用中', switching: '切换中…', switch: '切换', installing: '安装中…', install: '安装', uninstalling: '卸载中…', uninstall: '卸载',
     switchingTo: (version: string) => `正在切换到 ${version}…`, installingVersion: (version: string) => `正在安装 ${version}…`, uninstallingVersion: (version: string) => `正在卸载 ${version}…`,

@@ -105,6 +105,13 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(65,118,230,.
 .boundary-note svg { flex: 0 0 auto; width: 17px; height: 17px; color: #4176e6; }
 .version-content { min-width: 0; padding: 20px 22px 13px; }
 .toolbar { display: flex; align-items: center; gap: 12px; }
+.channel-picker { display: flex; align-items: center; gap: 6px; color: #61666b; font-size: 10px; white-space: nowrap; }
+.channel-picker select { border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); padding: 8px 24px 8px 9px; font: inherit; }
+.channel-picker select:focus-visible { outline: 3px solid rgba(65,118,230,.22); outline-offset: 1px; }
+.registry-settings { display: grid; gap: 6px; margin-top: 12px; color: #61666b; font-size: 10px; }
+.registry-settings input { min-width: 0; width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 7px; padding: 7px; color: var(--ink); background: #fff; font-size: 10px; }
+.registry-settings button { justify-self: end; border: 0; border-radius: 6px; padding: 6px 10px; background: var(--forest-2); color: #fff; font-size: 10px; cursor: pointer; }
+.registry-settings button:disabled { opacity: .45; cursor: default; }
 .search { display: flex; align-items: center; flex: 1; min-width: 160px; height: 36px; padding: 0 11px; border: 1px solid #d9ddd6; border-radius: 9px; color: #929891; background: rgba(255,255,255,.72); }
 .search:focus-within { border-color: #8db3ff; box-shadow: 0 0 0 3px rgba(65,118,230,.08); }
 .search svg { flex: 0 0 auto; width: 15px; height: 15px; }

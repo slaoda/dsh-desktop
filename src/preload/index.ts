@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { channels } from '../shared/ipc-channels'
-import type { AppSnapshot, AppUpdateSnapshot, DesktopApi, InstallProgress, LocalePreference } from '../shared/contracts'
+import type { AppSnapshot, AppUpdateSnapshot, DesktopApi, InstallProgress, LocalePreference, ReleaseChannel } from '../shared/contracts'
 
 const api: DesktopApi = {
   getSnapshot: () => ipcRenderer.invoke(channels.snapshot),
@@ -14,6 +14,7 @@ const api: DesktopApi = {
   openExternal: (url) => ipcRenderer.invoke(channels.openExternal, url),
   copyText: (text) => ipcRenderer.invoke(channels.copyText, text),
   setLocale: (preference: LocalePreference) => ipcRenderer.invoke(channels.setLocale, preference),
+  setVersionPreferences: (channel: ReleaseChannel, registryUrl: string) => ipcRenderer.invoke(channels.setVersionPreferences, channel, registryUrl),
   getAppUpdate: () => ipcRenderer.invoke(channels.appUpdateSnapshot),
   checkAppUpdate: () => ipcRenderer.invoke(channels.appUpdateCheck),
   downloadAppUpdate: () => ipcRenderer.invoke(channels.appUpdateDownload),

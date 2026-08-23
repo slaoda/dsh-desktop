@@ -10,6 +10,7 @@ export const channels = {
   openExternal: 'dsh:open-external',
   copyText: 'desktop:copy-text',
   setLocale: 'desktop:set-locale',
+  setVersionPreferences: 'dsh:set-version-preferences',
   stateChanged: 'dsh:state-changed',
   installProgress: 'dsh:install-progress',
   appUpdateSnapshot: 'desktop-update:snapshot',

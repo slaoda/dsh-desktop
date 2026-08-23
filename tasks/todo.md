@@ -2,8 +2,8 @@
 
 - [x] Requirements consolidated and assumptions recorded.
 - [x] Existing baseline passes before behavior changes.
-- [ ] Version channels classify stable and prerelease versions correctly.
-- [ ] Registry/proxy input is validated and credentials are rejected/redacted.
+- [x] Version channels classify stable and prerelease versions correctly.
+- [x] Registry input is validated and embedded credentials are rejected.
 - [ ] Failed candidate startup preserves the previous selected version.
 - [ ] Interrupted switch transaction is recoverable.
 - [ ] Automatic and manual backups exclude credentials and retain three copies.
