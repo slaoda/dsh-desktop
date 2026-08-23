@@ -431,9 +431,7 @@ function registerIpc(instance: AppController): void {
   ipcMain.handle(channels.select, async (event, version: unknown) => {
     assertManager(event)
     const target = exactVersionSchema.parse(version)
-    if (instance.isRuntimeActive()) await instance.stop()
-    await instance.select(target)
-    const snapshot = await instance.launch()
+    const snapshot = await instance.switchAndLaunch(target)
     if (!snapshot.runtimeUrl) throw new Error('官方 DSH 未返回本地地址')
     await openDshWindow(snapshot.runtimeUrl)
     return snapshot

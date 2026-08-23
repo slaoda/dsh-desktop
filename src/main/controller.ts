@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import path from 'node:path'
 import semver from 'semver'
 import type { AppLocale, AppSnapshot, InstallProgress, LocalePreference, OfficialVersion, ReleaseChannel } from '../shared/contracts'
 import { defaultRegistryUrl, exactVersionSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, resolveLocale } from '../shared/contracts'
@@ -6,6 +7,7 @@ import { runProcess } from './process-utils'
 import { DshRegistry } from './registry'
 import type { RuntimePaths } from './runtime-paths'
 import { StateStore, type PersistedState } from './state-store'
+import { SwitchTransactionStore } from './switch-transaction'
 import { DshSupervisor } from './dsh-supervisor'
 import { VersionManager } from './version-manager'
 
@@ -27,7 +29,8 @@ export class AppController extends EventEmitter {
     private readonly versions: VersionManager,
     private readonly supervisor: DshSupervisor,
     private readonly runtime: RuntimePaths,
-    private readonly systemLocale: AppLocale = 'zh-CN'
+    private readonly systemLocale: AppLocale = 'zh-CN',
+    private readonly switchTransactions: SwitchTransactionStore = new SwitchTransactionStore(path.dirname(store.file))
   ) {
     super()
     supervisor.on('status', () => { void this.emitSnapshot() })
@@ -36,6 +39,7 @@ export class AppController extends EventEmitter {
   async initialize(): Promise<AppSnapshot> {
     this.state = await this.store.read()
     await this.versions.cleanupInterruptedInstalls()
+    await this.recoverInterruptedSwitch()
     try {
       const result = await runProcess(this.runtime.node, ['--version'], { timeoutMs: 5_000 })
       this.nodeVersion = result.stdout.trim()
@@ -110,6 +114,40 @@ export class AppController extends EventEmitter {
     this.state.selectedVersion = version
     await this.store.write(this.state)
     this.error = null
+    return await this.emitSnapshot()
+  }
+
+  async switchAndLaunch(version: string): Promise<AppSnapshot> {
+    exactVersionSchema.parse(version)
+    if (this.state.selectedVersion === version && this.supervisor.status === 'running') return await this.snapshot()
+    const candidate = await this.versions.resolve(version)
+    const previousVersion = this.state.selectedVersion
+    if (this.isRuntimeActive()) await this.supervisor.stop()
+    await this.switchTransactions.begin(previousVersion, version)
+    try {
+      await this.supervisor.start(candidate)
+      this.state.selectedVersion = version
+      await this.store.write(this.state)
+      await this.switchTransactions.complete()
+      this.error = null
+    } catch (candidateError) {
+      this.state.selectedVersion = previousVersion
+      await this.store.write(this.state)
+      await this.switchTransactions.complete()
+      const detail = candidateError instanceof Error ? candidateError.message : '候选版本启动失败'
+      if (previousVersion) {
+        try {
+          const previous = await this.versions.resolve(previousVersion)
+          await this.supervisor.start(previous)
+          this.error = `新版本 ${version} 启动失败，已自动回退到 ${previousVersion}：${detail}`
+        } catch (rollbackError) {
+          const rollbackDetail = rollbackError instanceof Error ? rollbackError.message : '旧版本启动失败'
+          this.error = `新版本 ${version} 启动失败，选择已恢复到 ${previousVersion}，但旧版本未能启动：${detail}；${rollbackDetail}`
+        }
+      } else {
+        this.error = `新版本 ${version} 启动失败：${detail}`
+      }
+    }
     return await this.emitSnapshot()
   }
 
@@ -189,6 +227,17 @@ export class AppController extends EventEmitter {
     if (this.state.selectedVersion && versions.some((item) => item.version === this.state.selectedVersion)) return
     this.state.selectedVersion = versions.sort((a, b) => semver.rcompare(a.version, b.version))[0]?.version ?? null
     await this.store.write(this.state)
+  }
+
+  private async recoverInterruptedSwitch(): Promise<void> {
+    const pending = await this.switchTransactions.read()
+    if (!pending) return
+    this.state.selectedVersion = pending.previousVersion
+    await this.store.write(this.state)
+    await this.switchTransactions.complete()
+    this.error = pending.previousVersion
+      ? `检测到未完成的版本切换，已恢复到 ${pending.previousVersion}`
+      : '检测到未完成的首次版本启动，未提交候选版本'
   }
 
   private async emitSnapshot(): Promise<AppSnapshot> {
