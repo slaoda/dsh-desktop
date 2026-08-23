@@ -168,4 +168,64 @@ describe('RepairEngine', () => {
     expect(result.session).toMatchObject({ phase: 'completed', outcome: 'not-needed', diagnosis: null, repairAttempts: 0, retryAttempts: 0 })
     expect(await fixture.baselines.read()).toMatchObject({ version: '0.1.0-rc.8' })
   })
+
+  it('解析托管版本失败时只重装同一版本并在验证后提交', async () => {
+    const fixture = await createFixture()
+    let commits = 0
+    let rollbacks = 0
+    let startedVersion = ''
+    const candidate = { ...fixture.dsh, entry: path.join(directory, 'repaired', 'cli.js') }
+    const engine = new RepairEngine({
+      supervisor: { start: async (dsh) => { startedVersion = dsh.version; return 'http://127.0.0.1:43123' } },
+      preflight: passingPreflight(), baselines: fixture.baselines,
+      quarantine: fixture.quarantine, transactions: fixture.transactions,
+      backups: { hasSource: async () => true, create: async () => undefined },
+      managedVersions: {
+        beginRepair: async (version) => {
+          expect(version).toBe('0.1.0-rc.8')
+          return {
+            candidate,
+            commit: async () => { commits += 1 },
+            rollback: async () => { rollbacks += 1 }
+          }
+        }
+      }
+    })
+
+    const result = await engine.repairManagedVersion(
+      '0.1.0-rc.8', new Error('官方 DSH CLI 入口无效'), 'auto', 'https://registry.npmjs.org'
+    )
+
+    expect(result.session).toMatchObject({
+      phase: 'recovered', outcome: 'recovered', repairAttempts: 1, retryAttempts: 1,
+      diagnosis: { category: 'managed-install-corrupt' }
+    })
+    expect(result.session.actions).toEqual([expect.objectContaining({ kind: 'reinstall-managed-version', status: 'applied', target: '0.1.0-rc.8' })])
+    expect(startedVersion).toBe('0.1.0-rc.8')
+    expect(commits).toBe(1)
+    expect(rollbacks).toBe(0)
+  })
+
+  it('重装候选版本启动失败时恢复旧程序目录', async () => {
+    const fixture = await createFixture()
+    let rollbacks = 0
+    const engine = new RepairEngine({
+      supervisor: { start: async () => { throw new Error('repaired version still cannot start') } },
+      preflight: passingPreflight(), baselines: fixture.baselines,
+      quarantine: fixture.quarantine, transactions: fixture.transactions,
+      backups: { hasSource: async () => true, create: async () => undefined },
+      managedVersions: {
+        beginRepair: async () => ({
+          candidate: fixture.dsh,
+          commit: async () => undefined,
+          rollback: async () => { rollbacks += 1 }
+        })
+      }
+    })
+
+    await expect(engine.repairManagedVersion(
+      '0.1.0-rc.8', new Error('官方 DSH CLI 入口无效'), 'auto', 'https://registry.npmjs.org'
+    )).rejects.toMatchObject({ session: { phase: 'failed', repairAttempts: 1, retryAttempts: 1 } })
+    expect(rollbacks).toBe(1)
+  })
 })

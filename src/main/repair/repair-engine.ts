@@ -9,6 +9,7 @@ import type {
 } from '../../shared/contracts'
 import type { DshStartOptions } from '../dsh-supervisor'
 import type { ResolvedDsh } from '../version-manager'
+import type { ManagedVersionRepairTransaction } from '../version-manager'
 import type { RepairBaselineStore } from './repair-baseline'
 import { findUniquePluginChange } from './repair-baseline'
 import { diagnoseStartupFailure, mayAutoRepair } from './repair-diagnosis'
@@ -29,6 +30,14 @@ interface RepairBackups {
   create(reason: BackupReason, scope: BackupScope): Promise<unknown>
 }
 
+interface ManagedVersionRepairer {
+  beginRepair(
+    version: string,
+    progress: (value: { version: string; phase: 'downloading' | 'validating' | 'complete' | 'failed'; message: string }) => void,
+    registryUrl: string
+  ): Promise<ManagedVersionRepairTransaction>
+}
+
 export interface RepairEngineDependencies {
   supervisor: RepairSupervisor
   preflight: RepairPreflight
@@ -36,6 +45,7 @@ export interface RepairEngineDependencies {
   quarantine: PluginQuarantineStore
   transactions: RepairTransactionStore
   backups: RepairBackups | null
+  managedVersions?: ManagedVersionRepairer
 }
 
 export interface RepairLaunchResult {
@@ -47,6 +57,7 @@ export interface StartupRepairEngine {
   on(event: 'session', listener: (session: RepairSessionSummary) => void): this
   recoverInterrupted(): Promise<boolean>
   launch(dsh: ResolvedDsh, mode: RepairMode): Promise<RepairLaunchResult>
+  repairManagedVersion(version: string, failure: unknown, mode: RepairMode, registryUrl: string): Promise<RepairLaunchResult>
 }
 
 export class RepairLaunchError extends Error {
@@ -113,6 +124,69 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
     }
 
     return await this.quarantineAndRetry(dsh, inspection, diagnosis, session, failure)
+  }
+
+  async repairManagedVersion(
+    version: string,
+    failure: unknown,
+    mode: RepairMode,
+    registryUrl: string
+  ): Promise<RepairLaunchResult> {
+    let session = this.publish({ ...newSession(), phase: 'diagnosing' })
+    const diagnosis = diagnoseStartupFailure({ message: errorMessage(failure), source: 'installed', version })
+    session = this.publish({ ...session, diagnosis })
+    if (!mayAutoRepair(diagnosis, mode) || diagnosis.action?.kind !== 'reinstall-managed-version') {
+      const awaiting = diagnosis.action !== null && mode === 'ask'
+      session = this.publish({
+        ...session,
+        phase: awaiting ? 'awaiting-confirmation' : 'failed',
+        outcome: awaiting ? 'awaiting-confirmation' : 'failed'
+      })
+      throw new RepairLaunchError(diagnosis.summary, session, { cause: failure })
+    }
+    if (!this.dependencies.managedVersions) {
+      session = this.publish({ ...session, phase: 'failed', outcome: 'failed' })
+      throw new RepairLaunchError('托管版本修复器不可用', session, { cause: failure })
+    }
+
+    let transaction: ManagedVersionRepairTransaction | null = null
+    try {
+      if (!this.dependencies.backups || !await this.dependencies.backups.hasSource()) throw new Error('无法创建启动修复安全备份')
+      await this.dependencies.backups.create('pre-repair', 'configuration')
+      session = this.publish({ ...session, phase: 'repairing', repairAttempts: 1 })
+      transaction = await this.dependencies.managedVersions.beginRepair(version, () => undefined, registryUrl)
+      const overlay = await this.dependencies.quarantine.overlayPath()
+      const inspection = await this.dependencies.preflight.inspect(transaction.candidate, overlay)
+      session = this.publish({ ...session, phase: 'retrying', retryAttempts: 1 })
+      const url = await this.dependencies.supervisor.start(transaction.candidate, { repairOverlay: overlay })
+      await transaction.commit()
+      await this.captureSuccessfulBaseline(transaction.candidate, inspection)
+      session = this.publish({
+        ...session,
+        phase: 'recovered', outcome: 'recovered',
+        actions: [{
+          kind: 'reinstall-managed-version', target: version, status: 'applied',
+          summary: `已重装并验证 Harness ${version}`
+        }]
+      })
+      return { url, session }
+    } catch (repairError) {
+      if (transaction) await transaction.rollback()
+      session = this.publish({
+        ...session,
+        phase: 'failed', outcome: 'failed',
+        actions: [{
+          kind: 'reinstall-managed-version', target: version,
+          status: transaction ? 'rolled-back' : 'failed',
+          summary: transaction ? `Harness ${version} 的程序目录已恢复` : `未能重新安装 Harness ${version}`
+        }]
+      })
+      throw new RepairLaunchError(
+        `${diagnosis.summary} 自动修复未成功：${errorMessage(repairError)}`,
+        session,
+        { cause: failure }
+      )
+    }
   }
 
   private async quarantineAndRetry(

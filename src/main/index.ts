@@ -315,7 +315,8 @@ app.whenReady().then(async () => {
         baselines: new RepairBaselineStore(app.getPath('userData'), harnessHome),
         quarantine,
         transactions: new RepairTransactionStore(app.getPath('userData')),
-        backups: backupManager
+        backups: backupManager,
+        managedVersions: versions
       })
     : null
   const currentAppVersion = app.getVersion()

@@ -74,6 +74,7 @@ describe('AppController', () => {
         this.emit('session', session)
         return { url: await supervisor.start(dsh, { timeoutMs: 5_000, stabilityMs: 0 }), session }
       }
+      async repairManagedVersion(): Promise<never> { throw new Error('not used') }
     }
     const engine = new FakeRepairEngine()
     const controller = new AppController(
@@ -87,6 +88,54 @@ describe('AppController', () => {
     expect(engine.recoverCalls).toBe(1)
     expect(engine.mode).toBe('auto')
     expect(launched).toMatchObject({ runtimeStatus: 'running', runtimeUrl: expect.stringMatching(/^http:\/\/127\.0\.0\.1:/), repairSession: session })
+    await controller.stop()
+  })
+
+  it('当前托管版本入口损坏时把解析失败交给原版本修复', async () => {
+    directory = await mkdtemp(path.join(os.tmpdir(), 'dsh-controller-version-repair-'))
+    const runtime = {
+      node: process.execPath,
+      npmCli: path.join(root, 'tests/fixtures/fake-npm.mjs'),
+      pnpmCli: path.join(root, 'tests/fixtures/fake-pnpm.mjs'),
+      commandDir: path.dirname(process.execPath)
+    }
+    const versions = new VersionManager(directory, path.join(directory, 'bundled'), runtime)
+    await versions.install('1.0.0', ['1.0.0'], () => undefined)
+    const installed = await versions.resolve('1.0.0')
+    const supervisor = new DshSupervisor(process.execPath)
+    const session: RepairSessionSummary = {
+      id: '22222222-2222-4222-8222-222222222222',
+      phase: 'recovered', outcome: 'recovered', diagnosis: {
+        category: 'managed-install-corrupt', confidence: 'high', summary: '损坏', evidence: [], candidate: null,
+        action: { kind: 'reinstall-managed-version', version: '1.0.0', reversible: true, requiresConfirmation: false }
+      },
+      actions: [{ kind: 'reinstall-managed-version', target: '1.0.0', status: 'applied', summary: '已修复' }],
+      repairAttempts: 1, retryAttempts: 1, quarantinedPlugin: null
+    }
+    class FakeVersionRepairEngine extends EventEmitter implements StartupRepairEngine {
+      repairs = 0
+      async recoverInterrupted(): Promise<boolean> { return false }
+      async launch(): Promise<never> { throw new Error('损坏入口不应进入普通启动') }
+      async repairManagedVersion(version: string, _failure: unknown, mode: 'auto' | 'ask' | 'diagnose', registryUrl: string) {
+        this.repairs += 1
+        expect({ version, mode, registryUrl }).toEqual({ version: '1.0.0', mode: 'auto', registryUrl: 'https://registry.npmjs.org' })
+        await writeFile(installed.entry, await readFile(path.join(root, 'tests/fixtures/fake-dsh.mjs'), 'utf8'))
+        const repaired = await versions.resolve(version)
+        return { url: await supervisor.start(repaired, { timeoutMs: 5_000, stabilityMs: 0 }), session }
+      }
+    }
+    const engine = new FakeVersionRepairEngine()
+    const controller = new AppController(
+      '0.1.0', new StateStore(directory), new DshRegistry(async () => new Response('{}') as never),
+      versions, supervisor, runtime, 'zh-CN', undefined, null, null, null, engine
+    )
+    await controller.initialize()
+    await rm(installed.entry)
+
+    const launched = await controller.launch()
+
+    expect(engine.repairs).toBe(1)
+    expect(launched).toMatchObject({ runtimeStatus: 'running', repairSession: session })
     await controller.stop()
   })
 })

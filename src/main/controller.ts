@@ -145,7 +145,18 @@ export class AppController extends EventEmitter {
   async launch(): Promise<AppSnapshot> {
     if (!this.state.selectedVersion) throw new Error('请先安装并选择一个 DSH 版本')
     try {
-      const resolved = await this.resolveSelection(this.state.selectedVersion, this.state.selectedExternalId)
+      let resolved: ResolvedDsh
+      try {
+        resolved = await this.resolveSelection(this.state.selectedVersion, this.state.selectedExternalId)
+      } catch (resolutionError) {
+        if (!this.repairEngine || this.state.selectedExternalId) throw resolutionError
+        const result = await this.repairEngine.repairManagedVersion(
+          this.state.selectedVersion, resolutionError, 'auto', this.state.registryUrl
+        )
+        this.repairSession = result.session
+        this.error = null
+        return await this.snapshot()
+      }
       if (this.repairEngine) {
         const result = await this.repairEngine.launch(resolved, 'auto')
         this.repairSession = result.session

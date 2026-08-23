@@ -1,7 +1,10 @@
+import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import writeFileAtomic from 'write-file-atomic'
+import { z } from 'zod'
 import { defaultRegistryUrl, exactVersionSchema, officialPackageName, registryUrlSchema, type InstallProgress, type InstalledVersion } from '../shared/contracts'
 import type { RuntimePaths } from './runtime-paths'
 import { npmProxyEnvironment } from './network-proxy'
@@ -37,9 +40,29 @@ export interface ResolvedDsh {
   source: 'bundled' | 'installed' | 'external'
 }
 
+const repairDirectoryNameSchema = z.string().regex(/^\.repair-(?:install|backup)-[0-9A-Za-z.+-]+-[0-9a-f-]{36}$/)
+const versionRepairRecordSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: z.string().uuid(),
+  version: exactVersionSchema,
+  stagingName: repairDirectoryNameSchema,
+  rollbackName: repairDirectoryNameSchema.nullable(),
+  stage: z.enum(['prepared', 'swapped', 'committed']),
+  startedAt: z.string().datetime()
+}).strict()
+
+export type VersionRepairRecord = z.infer<typeof versionRepairRecordSchema>
+
+export interface ManagedVersionRepairTransaction {
+  candidate: ResolvedDsh
+  commit(): Promise<void>
+  rollback(): Promise<void>
+}
+
 export class VersionManager {
   readonly versionsDir: string
   readonly installFailureLog: string
+  readonly repairTransactionFile: string
 
   constructor(
     userData: string,
@@ -50,6 +73,7 @@ export class VersionManager {
   ) {
     this.versionsDir = path.join(userData, 'dsh-versions')
     this.installFailureLog = path.join(userData, 'dsh-install-failure.log')
+    this.repairTransactionFile = path.join(this.versionsDir, '.repair-transaction.json')
   }
 
   setProxyUrl(proxyUrl: string | null): void {
@@ -57,18 +81,19 @@ export class VersionManager {
   }
 
   async cleanupInterruptedInstalls(): Promise<void> {
+    await this.recoverInterruptedRepair()
     let names: string[] = []
     try { names = await readdir(this.versionsDir) } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
     await Promise.all(names
-      .filter((name) => name.startsWith('.install-'))
+      .filter((name) => name.startsWith('.install-') || name.startsWith('.repair-install-'))
       .map(async (name) => { await rm(path.join(this.versionsDir, name), { recursive: true, force: true }) }))
   }
 
   async list(): Promise<InstalledVersion[]> {
     const entries: InstalledVersion[] = []
-    for (const [base, source] of [[this.bundledDir, 'bundled'], [this.versionsDir, 'installed']] as const) {
+    for (const [base, source] of [[this.versionsDir, 'installed'], [this.bundledDir, 'bundled']] as const) {
       let names: string[] = []
       try { names = await readdir(base) } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
@@ -78,7 +103,11 @@ export class VersionManager {
         try {
           await this.resolveAt(path.join(base, version), version, source)
           entries.push({ version, source })
-        } catch { /* Ignore incomplete directories. */ }
+        } catch {
+          // Keep an installed exact-version directory visible so the startup
+          // repair path can replace a damaged manifest or CLI transactionally.
+          if (source === 'installed') entries.push({ version, source })
+        }
       }
     }
     return entries.filter((item, index, all) => all.findIndex((other) => other.version === item.version) === index)
@@ -104,17 +133,7 @@ export class VersionManager {
     const staging = path.join(this.versionsDir, `.install-${version}-${Date.now()}`)
     await mkdir(staging, { recursive: true })
     try {
-      await Promise.all([
-        writeFile(path.join(staging, 'package.json'), `${JSON.stringify({
-          name: 'dsh-desktop-managed-version', version: '0.0.0', private: true,
-          dependencies: { [officialPackageName]: version }
-        })}\n`),
-        writeFile(path.join(staging, 'pnpm-workspace.yaml'), pnpmBuildPolicy)
-      ])
-      progress({ version, phase: 'downloading', message: `正在安装官方 DSH ${version}` })
-      await this.runPnpmInstall(staging, version, progress, validatedRegistryUrl)
-      progress({ version, phase: 'validating', message: '正在校验官方包版本和入口' })
-      await this.resolveAt(staging, version, 'installed')
+      await this.prepareInstallDirectory(staging, version, progress, validatedRegistryUrl)
       await rename(staging, destination)
       progress({ version, phase: 'complete', message: `DSH ${version} 已安装` })
     } catch (error) {
@@ -130,6 +149,63 @@ export class VersionManager {
     if (!existsSync(destination)) throw new Error('该版本不是用户安装的 DSH 版本')
     await this.resolveAt(destination, version, 'installed')
     await rm(destination, { recursive: true, force: true })
+  }
+
+  async beginRepair(
+    version: string,
+    progress: (value: InstallProgress) => void,
+    registryUrl: string = defaultRegistryUrl
+  ): Promise<ManagedVersionRepairTransaction> {
+    const validatedVersion = exactVersionSchema.parse(version)
+    const validatedRegistryUrl = registryUrlSchema.parse(registryUrl)
+    await mkdir(this.versionsDir, { recursive: true })
+    await this.recoverInterruptedRepair()
+    const id = randomUUID()
+    const stagingName = `.repair-install-${validatedVersion}-${id}`
+    const destination = path.join(this.versionsDir, validatedVersion)
+    const rollbackName = existsSync(destination) ? `.repair-backup-${validatedVersion}-${id}` : null
+    const staging = this.repairPath(stagingName)
+    await mkdir(staging, { recursive: true })
+    let record: VersionRepairRecord | null = null
+    try {
+      await this.prepareInstallDirectory(staging, validatedVersion, progress, validatedRegistryUrl)
+      record = versionRepairRecordSchema.parse({
+        schemaVersion: 1, id, version: validatedVersion, stagingName, rollbackName,
+        stage: 'prepared', startedAt: new Date().toISOString()
+      })
+      await this.writeRepairTransaction(record)
+      if (rollbackName) await rename(destination, this.repairPath(rollbackName))
+      await rename(staging, destination)
+      record = { ...record, stage: 'swapped' }
+      await this.writeRepairTransaction(record)
+      const candidate = await this.resolveAt(destination, validatedVersion, 'installed')
+      let finished = false
+      return {
+        candidate,
+        commit: async () => {
+          if (finished) return
+          await this.finishRepair(record as VersionRepairRecord, true)
+          finished = true
+        },
+        rollback: async () => {
+          if (finished) return
+          await this.finishRepair(record as VersionRepairRecord, false)
+          finished = true
+        }
+      }
+    } catch (error) {
+      if (record) await this.rollbackRepair(record)
+      else await rm(staging, { recursive: true, force: true })
+      throw error
+    }
+  }
+
+  async readRepairTransaction(): Promise<VersionRepairRecord | null> {
+    try {
+      return versionRepairRecordSchema.parse(JSON.parse(await readFile(this.repairTransactionFile, 'utf8')))
+    } catch {
+      return null
+    }
   }
 
   private async runPnpmInstall(prefix: string, version: string, progress: (value: InstallProgress) => void, registryUrl: string): Promise<void> {
@@ -213,6 +289,76 @@ export class VersionManager {
       })
       resetStallTimer()
     })
+  }
+
+  private async prepareInstallDirectory(
+    staging: string,
+    version: string,
+    progress: (value: InstallProgress) => void,
+    registryUrl: string
+  ): Promise<void> {
+    await Promise.all([
+      writeFile(path.join(staging, 'package.json'), `${JSON.stringify({
+        name: 'dsh-desktop-managed-version', version: '0.0.0', private: true,
+        dependencies: { [officialPackageName]: version }
+      })}\n`),
+      writeFile(path.join(staging, 'pnpm-workspace.yaml'), pnpmBuildPolicy)
+    ])
+    progress({ version, phase: 'downloading', message: `正在安装官方 DSH ${version}` })
+    await this.runPnpmInstall(staging, version, progress, registryUrl)
+    progress({ version, phase: 'validating', message: '正在校验官方包版本和入口' })
+    await this.resolveAt(staging, version, 'installed')
+  }
+
+  private repairPath(name: string): string {
+    const validated = repairDirectoryNameSchema.parse(name)
+    const target = path.join(this.versionsDir, validated)
+    if (path.dirname(target) !== this.versionsDir) throw new Error('版本修复事务路径无效')
+    return target
+  }
+
+  private async writeRepairTransaction(record: VersionRepairRecord): Promise<void> {
+    await writeFileAtomic(this.repairTransactionFile, `${JSON.stringify(versionRepairRecordSchema.parse(record), null, 2)}\n`, { mode: 0o600 })
+  }
+
+  private async finishRepair(record: VersionRepairRecord, commit: boolean): Promise<void> {
+    const current = await this.readRepairTransaction()
+    if (!current || current.id !== record.id) throw new Error('版本修复事务不存在或已被替换')
+    if (commit) {
+      const committed = versionRepairRecordSchema.parse({ ...current, stage: 'committed' })
+      await this.writeRepairTransaction(committed)
+      if (committed.rollbackName) await rm(this.repairPath(committed.rollbackName), { recursive: true, force: true })
+      await rm(this.repairPath(committed.stagingName), { recursive: true, force: true })
+      await rm(this.repairTransactionFile, { force: true })
+      return
+    }
+    await this.rollbackRepair(current)
+  }
+
+  private async recoverInterruptedRepair(): Promise<boolean> {
+    const record = await this.readRepairTransaction()
+    if (!record) return false
+    if (record.stage === 'committed') {
+      if (record.rollbackName) await rm(this.repairPath(record.rollbackName), { recursive: true, force: true })
+      await rm(this.repairPath(record.stagingName), { recursive: true, force: true })
+      await rm(this.repairTransactionFile, { force: true })
+      return true
+    }
+    await this.rollbackRepair(record)
+    return true
+  }
+
+  private async rollbackRepair(record: VersionRepairRecord): Promise<void> {
+    const destination = path.join(this.versionsDir, exactVersionSchema.parse(record.version))
+    const rollback = record.rollbackName ? this.repairPath(record.rollbackName) : null
+    if (rollback && existsSync(rollback)) {
+      await rm(destination, { recursive: true, force: true })
+      await rename(rollback, destination)
+    } else if (!rollback) {
+      await rm(destination, { recursive: true, force: true })
+    }
+    await rm(this.repairPath(record.stagingName), { recursive: true, force: true })
+    await rm(this.repairTransactionFile, { force: true })
   }
 
   private async resolveAt(root: string, version: string, source: ResolvedDsh['source']): Promise<ResolvedDsh> {
