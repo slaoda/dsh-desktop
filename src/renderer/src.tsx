@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, AppUpdateSnapshot, InstallProgress, LocalePreference, ReleaseChannel } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, AppUpdateSnapshot, BackupScope, InstallProgress, LocalePreference, ReleaseChannel } from '../shared/contracts'
 import deepSeekWhale from './deepseek-whale.svg'
 import { dshRuntimeFailureDetail, isDshRuntimeFailure } from './runtime-error'
 import './style.css'
@@ -10,7 +10,7 @@ const initialLocale: AppLocale = navigator.language.toLowerCase().startsWith('zh
 const empty: AppSnapshot = {
   appVersion: '0.1.0', nodeVersion: null, latestVersion: null, selectedVersion: null,
   locale: initialLocale, localePreference: 'system', releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org',
-  dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
+  harnessHome: null, backups: [], dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
 }
 const emptyAppUpdate: AppUpdateSnapshot = {
   currentVersion: '0.1.0', availableVersion: null, delivery: 'manual', status: 'idle', percent: null, message: null
@@ -139,7 +139,17 @@ function App(): React.JSX.Element {
   }
 
   const uninstallVersion = async (version: string): Promise<void> => {
+    if (!window.confirm(language.confirmUninstall(version))) return
     await perform(`uninstall:${version}`, language.uninstallingVersion(version), () => window.dshDesktop.uninstall(version))
+  }
+
+  const createBackup = async (scope: BackupScope): Promise<void> => {
+    await perform(`backup:${scope}`, language.creatingBackup, () => window.dshDesktop.createBackup(scope))
+  }
+
+  const restoreBackup = async (id: string, scope: BackupScope): Promise<void> => {
+    if (!window.confirm(language.confirmRestore)) return
+    await perform(`restore:${id}:${scope}`, language.restoringBackup, () => window.dshDesktop.restoreBackup(id, scope))
   }
 
   return <main className="app-shell">
@@ -275,6 +285,12 @@ function App(): React.JSX.Element {
           </label>
         </div>
         <div className="boundary-note"><ShieldIcon /><span>{language.onlyOfficialLine1}<br />{language.onlyOfficialLine2}</span></div>
+        <section className="backup-panel" aria-label={language.backups}>
+          <span className="side-heading">{language.backups}</span>
+          <small title={snapshot.harnessHome ?? ''}>{snapshot.harnessHome ?? language.backupUnavailable}</small>
+          <div className="backup-actions"><button type="button" disabled={busyAction !== null || running || !snapshot.harnessHome} onClick={() => void createBackup('configuration')}>{language.backupConfig}</button><button type="button" disabled={busyAction !== null || running || !snapshot.harnessHome} onClick={() => void createBackup('full')}>{language.backupAll}</button></div>
+          <div className="backup-list">{snapshot.backups.map((backup) => <article key={backup.id}><span>{formatDate(backup.createdAt, snapshot.locale)} · {backup.scope === 'full' ? language.configAndSessions : language.configOnly}</span><div><button type="button" disabled={busyAction !== null || running} onClick={() => void restoreBackup(backup.id, 'configuration')}>{language.restoreConfig}</button>{backup.scope === 'full' && <button type="button" disabled={busyAction !== null || running} onClick={() => void restoreBackup(backup.id, 'full')}>{language.restoreAll}</button>}</div></article>)}</div>
+        </section>
       </aside>
 
       <div className="version-content">
@@ -404,6 +420,7 @@ function copy(locale: AppLocale) {
     versionFilters: 'Version filters', versions: 'Versions', allVersions: 'All versions', installed: 'Installed', available: 'Available', installedVersions: 'Installed versions', availableVersions: 'Available versions',
     versionSource: 'Version source', officialNpm: 'Official npm registry', officialNpmShort: 'Official npm', onlyOfficialLine1: 'Installs and runs only', onlyOfficialLine2: 'official DSH packages',
     registryAddress: 'Registry address', save: 'Save', releaseChannel: 'Channel', stable: 'Stable', preview: 'Preview', allChannels: 'All', savingVersionPreferences: 'Saving version source settings…',
+    backups: 'Backups', backupUnavailable: 'Backup unavailable', backupConfig: 'Back up config', backupAll: 'Back up all', configOnly: 'Config', configAndSessions: 'Config + sessions', restoreConfig: 'Restore config', restoreAll: 'Restore all', creatingBackup: 'Creating backup…', restoringBackup: 'Restoring backup…', confirmRestore: 'Stop Harness and restore this backup? A safety backup of the current data will be created first.', confirmUninstall: (version: string) => `Uninstall Harness ${version}?`,
     searchVersion: 'Search versions', showPrerelease: 'Show prereleases', refreshVersions: 'Refresh official versions', syncingVersions: 'Syncing official npm versions…',
     versionCount: (count: number) => `${count} version${count === 1 ? '' : 's'}`, latest: 'Latest', inUse: 'In use', switching: 'Switching…', switch: 'Switch', installing: 'Installing…', install: 'Install', uninstalling: 'Uninstalling…', uninstall: 'Uninstall',
     switchingTo: (version: string) => `Switching to ${version}…`, installingVersion: (version: string) => `Installing ${version}…`, uninstallingVersion: (version: string) => `Uninstalling ${version}…`,
@@ -424,6 +441,7 @@ function copy(locale: AppLocale) {
     versionFilters: '版本筛选', versions: '版本', allVersions: '全部版本', installed: '已安装', available: '可安装', installedVersions: '已安装版本', availableVersions: '可安装版本',
     versionSource: '版本来源', officialNpm: 'npm 官方源', officialNpmShort: '官方 npm', onlyOfficialLine1: '仅安装并运行', onlyOfficialLine2: '官方 DSH 包',
     registryAddress: '镜像地址', save: '保存', releaseChannel: '渠道', stable: '稳定版', preview: '预览版', allChannels: '全部', savingVersionPreferences: '正在保存版本源设置…',
+    backups: '备份', backupUnavailable: '备份不可用', backupConfig: '备份配置', backupAll: '完整备份', configOnly: '仅配置', configAndSessions: '配置及会话', restoreConfig: '恢复配置', restoreAll: '全部恢复', creatingBackup: '正在创建备份…', restoringBackup: '正在恢复备份…', confirmRestore: '确定停止 Harness 并恢复这个备份吗？恢复前会先为当前数据创建安全备份。', confirmUninstall: (version: string) => `确定卸载 Harness ${version} 吗？`,
     searchVersion: '搜索版本号', showPrerelease: '显示预发布版本', refreshVersions: '刷新官方版本', syncingVersions: '正在同步 npm 官方版本…',
     versionCount: (count: number) => `${count} 个版本`, latest: '最新', inUse: '使用中', switching: '切换中…', switch: '切换', installing: '安装中…', install: '安装', uninstalling: '卸载中…', uninstall: '卸载',
     switchingTo: (version: string) => `正在切换到 ${version}…`, installingVersion: (version: string) => `正在安装 ${version}…`, uninstallingVersion: (version: string) => `正在卸载 ${version}…`,

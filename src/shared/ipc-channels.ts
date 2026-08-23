@@ -11,6 +11,8 @@ export const channels = {
   copyText: 'desktop:copy-text',
   setLocale: 'desktop:set-locale',
   setVersionPreferences: 'dsh:set-version-preferences',
+  createBackup: 'dsh:create-backup',
+  restoreBackup: 'dsh:restore-backup',
   stateChanged: 'dsh:state-changed',
   installProgress: 'dsh:install-progress',
   appUpdateSnapshot: 'desktop-update:snapshot',

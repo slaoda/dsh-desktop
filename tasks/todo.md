@@ -6,8 +6,8 @@
 - [x] Registry input is validated and embedded credentials are rejected.
 - [x] Failed candidate startup preserves the previous selected version.
 - [x] Interrupted switch transaction is recoverable.
-- [ ] Automatic and manual backups exclude credentials and retain three copies.
-- [ ] Selective restore supports configuration-only and sessions.
+- [x] Automatic and manual backups exclude credentials and retain three copies.
+- [x] Selective restore supports configuration-only and sessions.
 - [ ] Existing installations are detected and ownership-classified.
 - [ ] Project-local installations are read-only.
 - [ ] Running versions cannot be uninstalled.

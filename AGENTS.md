@@ -5,8 +5,8 @@ English (authoritative AI instructions) | [简体中文（人工审阅）](AGENT
 ## Product boundary
 
 - DSH Desktop is a community Electron shell for the official `@deepseek-ai/dsh` package on macOS and Windows.
-- Keep official DSH unchanged: do not fork, patch, rebuild, inject into, or import private modules from it, and do not take ownership of its configuration, credentials, sessions, plugins, Skills, MCP, permissions, or user data.
-- The desktop app owns only its bundled runtime, exact official DSH installations, application state, process supervision, Desktop-owned windows, and application update channel.
+- Keep official DSH unchanged: do not fork, patch, rebuild, inject into, or import private modules from it. Configuration, sessions, plugins, Skills, MCP, permissions, and user data remain user-owned; the manager may copy the explicitly allowlisted non-credential categories only for a user-requested backup/restore or a recoverable version switch.
+- The desktop app owns only its bundled runtime, exact official DSH installations, application state, process supervision, Desktop-owned windows, application update channel, transaction journals, and manager-created backup archives.
 - Keep official DSH package updates and DSH Desktop application updates separate and user-controlled. Never install, select, switch, or replace a DSH version without an explicit user action.
 
 ## Architecture invariants
@@ -16,7 +16,7 @@ English (authoritative AI instructions) | [简体中文（人工审阅）](AGENT
 - The Electron main process is the only privileged application layer. Filesystem, network, process, updater, menu, window, and external-URL operations execute there.
 - The official DSH window displays only the official Web UI. It has no preload, receives no Desktop controls or injected code, and exposes no Node.js, Electron, or Desktop IPC API.
 - Desktop-owned renderer code reaches privileged behavior only through the typed preload bridge. The main process validates untrusted IPC input again before performing an operation.
-- Keep official DSH and Desktop state separate. Production code inherits an existing `DSH_HOME` but never sets, redirects, reads, migrates, backs up, or deletes it.
+- Keep official DSH and Desktop state separate. Production code inherits an existing `DSH_HOME` and never sets, redirects, or deletes the home. Only the focused backup service may read or restore allowlisted paths after explicit user action or as the pre-switch recovery step; it must exclude credentials, environment files, key material, symlinks, and unrecognized roots.
 
 ## Repository layout
 

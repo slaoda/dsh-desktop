@@ -1,8 +1,9 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, net, Notification, session, shell } from 'electron'
 import electronUpdater from 'electron-updater'
+import os from 'node:os'
 import path from 'node:path'
 import semver from 'semver'
-import { channels, clipboardTextSchema, exactVersionSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, type AppLocale, type AppSnapshot, type AppUpdateSnapshot, type InstallProgress, type LocalePreference } from '../shared/contracts'
+import { backupIdSchema, backupScopeSchema, channels, clipboardTextSchema, exactVersionSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, type AppLocale, type AppSnapshot, type AppUpdateSnapshot, type InstallProgress, type LocalePreference } from '../shared/contracts'
 import { DesktopUpdater } from './app-updater'
 import { applyNetworkProxy, configureNetworkProxy } from './network-proxy'
 import { AppController } from './controller'
@@ -11,6 +12,8 @@ import { DshRegistry } from './registry'
 import { resolveRuntimePaths } from './runtime-paths'
 import { StateStore } from './state-store'
 import { VersionManager } from './version-manager'
+import { BackupManager } from './backup-manager'
+import { resolveHarnessHome } from './harness-home'
 
 const APP_NAME = 'DSH Desktop'
 const RELEASE_DOWNLOAD_URL = 'https://github.com/qufei1993/dsh-desktop/releases/latest'
@@ -469,6 +472,14 @@ function registerIpc(instance: AppController): void {
     assertManager(event)
     return await instance.setVersionPreferences(releaseChannelSchema.parse(rawChannel), registryUrlSchema.parse(rawRegistryUrl))
   })
+  ipcMain.handle(channels.createBackup, async (event, rawScope: unknown) => {
+    assertManager(event)
+    return await instance.createBackup(backupScopeSchema.parse(rawScope))
+  })
+  ipcMain.handle(channels.restoreBackup, async (event, rawId: unknown, rawScope: unknown) => {
+    assertManager(event)
+    return await instance.restoreBackup(backupIdSchema.parse(rawId), backupScopeSchema.parse(rawScope))
+  })
   ipcMain.handle(channels.appUpdateSnapshot, (event) => {
     assertManager(event)
     return desktopUpdater?.snapshot()
@@ -501,10 +512,19 @@ app.whenReady().then(async () => {
   const runtime = resolveRuntimePaths(resourcesRoot, app.isPackaged)
   const store = new StateStore(app.getPath('userData'))
   const versions = new VersionManager(app.getPath('userData'), path.join(resourcesRoot, 'dsh'), runtime, proxy.url)
+  let backupManager: BackupManager | null = null
+  try {
+    backupManager = new BackupManager(app.getPath('userData'), resolveHarnessHome(process.env, os.homedir()))
+  } catch (error) {
+    console.warn(error instanceof Error ? error.message : 'Harness 备份功能初始化失败')
+  }
   const supervisor = new DshSupervisor(runtime.node, [runtime.commandDir, path.dirname(runtime.node)])
   const currentAppVersion = TEST_CURRENT_VERSION && semver.valid(TEST_CURRENT_VERSION) ? TEST_CURRENT_VERSION : app.getVersion()
   const updateSupported = app.isPackaged || TEST_ENABLE_UPDATE === '1'
-  controller = new AppController(currentAppVersion, store, new DshRegistry(net.fetch as typeof fetch), versions, supervisor, runtime, normalizeSystemLocale(app.getLocale()))
+  controller = new AppController(
+    currentAppVersion, store, new DshRegistry(net.fetch as typeof fetch), versions, supervisor, runtime,
+    normalizeSystemLocale(app.getLocale()), undefined, backupManager
+  )
   desktopUpdater = new DesktopUpdater(
     electronUpdater.autoUpdater,
     currentAppVersion,

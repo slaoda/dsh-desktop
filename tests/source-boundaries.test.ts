@@ -47,7 +47,7 @@ import type { DesktopApi } from '../shared/contracts'
   it('rejects official DSH source imports and unsafe process or window configuration', () => {
     const content = `
 import internal from '@deepseek-ai/dsh/private'
-const home = 'DSH_HOME'
+process.env.DSH_HOME = '/tmp/redirected'
 const options = { nodeIntegration: true, shell: true }
 `
     expect(sourceBoundaryViolations('src/main/example.ts', content)).toEqual([
@@ -55,6 +55,16 @@ const options = { nodeIntegration: true, shell: true }
       'must not import official DSH source modules',
       'Node integration must stay disabled',
       'child processes must not use a shell'
+    ])
+  })
+
+  it('只允许聚焦模块读取 DSH_HOME 且始终禁止覆盖', () => {
+    expect(sourceBoundaryViolations('src/main/harness-home.ts', 'const configured = environment.DSH_HOME')).toEqual([])
+    expect(sourceBoundaryViolations('src/main/controller.ts', 'const configured = process.env.DSH_HOME')).toEqual([
+      'only harness-home may resolve DSH_HOME'
+    ])
+    expect(sourceBoundaryViolations('src/main/harness-home.ts', "environment.DSH_HOME = '/tmp'" )).toEqual([
+      'production source must not override DSH_HOME'
     ])
   })
 })

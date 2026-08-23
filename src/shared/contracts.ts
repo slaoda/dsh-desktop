@@ -19,11 +19,24 @@ export const registryUrlSchema = z.string().trim().min(1).max(2_048).superRefine
   }
 }).transform((value) => value.replace(/\/+$/, ''))
 export const clipboardTextSchema = z.string().min(1).max(4_096)
+export const backupScopeSchema = z.enum(['configuration', 'full'])
+export const backupIdSchema = z.string().regex(/^\d{8}T\d{9}Z-[0-9a-f]{8}$/)
 export const defaultRegistryUrl = 'https://registry.npmjs.org' as const
 
 export type AppLocale = 'zh-CN' | 'en-US'
 export type LocalePreference = z.infer<typeof localePreferenceSchema>
 export type ReleaseChannel = z.infer<typeof releaseChannelSchema>
+export type BackupScope = z.infer<typeof backupScopeSchema>
+export type BackupReason = 'manual' | 'update' | 'pre-restore'
+
+export interface BackupSummary {
+  id: string
+  createdAt: string
+  reason: BackupReason
+  scope: BackupScope
+  fileCount: number
+  bytes: number
+}
 
 export function resolveLocale(preference: LocalePreference, systemLocale: AppLocale): AppLocale {
   return preference === 'system' ? systemLocale : preference
@@ -47,6 +60,8 @@ export interface AppSnapshot {
   localePreference: LocalePreference
   releaseChannel: ReleaseChannel
   registryUrl: string
+  harnessHome: string | null
+  backups: BackupSummary[]
   nodeVersion: string | null
   latestVersion: string | null
   selectedVersion: string | null
@@ -89,6 +104,8 @@ export interface DesktopApi {
   copyText(text: string): Promise<void>
   setLocale(preference: LocalePreference): Promise<AppSnapshot>
   setVersionPreferences(channel: ReleaseChannel, registryUrl: string): Promise<AppSnapshot>
+  createBackup(scope: BackupScope): Promise<AppSnapshot>
+  restoreBackup(id: string, scope: BackupScope): Promise<AppSnapshot>
   getAppUpdate(): Promise<AppUpdateSnapshot>
   checkAppUpdate(): Promise<AppUpdateSnapshot>
   downloadAppUpdate(): Promise<AppUpdateSnapshot>

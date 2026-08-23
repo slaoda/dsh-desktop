@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, InstallProgress, LocalePreference, OfficialVersion, ReleaseChannel } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, OfficialVersion, ReleaseChannel } from '../shared/contracts'
 import { defaultRegistryUrl, exactVersionSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, resolveLocale } from '../shared/contracts'
 import { runProcess } from './process-utils'
 import { DshRegistry } from './registry'
@@ -10,6 +10,7 @@ import { StateStore, type PersistedState } from './state-store'
 import { SwitchTransactionStore } from './switch-transaction'
 import { DshSupervisor } from './dsh-supervisor'
 import { VersionManager } from './version-manager'
+import { BackupManager } from './backup-manager'
 
 export class AppController extends EventEmitter {
   private state: PersistedState = {
@@ -30,7 +31,8 @@ export class AppController extends EventEmitter {
     private readonly supervisor: DshSupervisor,
     private readonly runtime: RuntimePaths,
     private readonly systemLocale: AppLocale = 'zh-CN',
-    private readonly switchTransactions: SwitchTransactionStore = new SwitchTransactionStore(path.dirname(store.file))
+    private readonly switchTransactions: SwitchTransactionStore = new SwitchTransactionStore(path.dirname(store.file)),
+    private readonly backups: BackupManager | null = null
   ) {
     super()
     supervisor.on('status', () => { void this.emitSnapshot() })
@@ -123,6 +125,16 @@ export class AppController extends EventEmitter {
     const candidate = await this.versions.resolve(version)
     const previousVersion = this.state.selectedVersion
     if (this.isRuntimeActive()) await this.supervisor.stop()
+    if (previousVersion && previousVersion !== version && this.backups && await this.backups.hasSource()) {
+      try {
+        await this.backups.create('update', 'full')
+      } catch (backupError) {
+        const detail = backupError instanceof Error ? backupError.message : '备份失败'
+        try { await this.supervisor.start(await this.versions.resolve(previousVersion)) } catch { /* Snapshot reports the stopped/failed runtime. */ }
+        this.error = `切换到 ${version} 前的安全备份失败，已取消切换：${detail}`
+        return await this.emitSnapshot()
+      }
+    }
     await this.switchTransactions.begin(previousVersion, version)
     try {
       await this.supervisor.start(candidate)
@@ -193,6 +205,24 @@ export class AppController extends EventEmitter {
     return await this.refresh()
   }
 
+  async createBackup(scope: BackupScope): Promise<AppSnapshot> {
+    if (!this.backups) throw new Error('Harness 备份功能不可用')
+    if (this.isRuntimeActive()) throw new Error('创建备份前请先停止正在运行的 DSH')
+    if (!await this.backups.hasSource()) throw new Error('尚未找到可备份的 Harness 主目录')
+    await this.backups.create('manual', scope)
+    this.error = null
+    return await this.emitSnapshot()
+  }
+
+  async restoreBackup(id: string, scope: BackupScope): Promise<AppSnapshot> {
+    if (!this.backups) throw new Error('Harness 备份功能不可用')
+    if (this.isRuntimeActive()) throw new Error('恢复备份前请先停止正在运行的 DSH')
+    if (await this.backups.hasSource()) await this.backups.create('pre-restore', 'full')
+    await this.backups.restore(id, scope)
+    this.error = null
+    return await this.emitSnapshot()
+  }
+
   isRuntimeActive(): boolean {
     return !['idle', 'failed'].includes(this.supervisor.status)
   }
@@ -204,12 +234,15 @@ export class AppController extends EventEmitter {
   async snapshot(): Promise<AppSnapshot> {
     const installedVersions = (await this.versions.list()).sort((a, b) => semver.rcompare(a.version, b.version))
     const availableVersions = [...this.availableVersions].sort((a, b) => semver.rcompare(a.version, b.version))
+    const backups = this.backups ? await this.backups.list() : []
     return {
       appVersion: this.appVersion,
       locale: resolveLocale(this.state.localePreference, this.systemLocale),
       localePreference: this.state.localePreference,
       releaseChannel: this.state.releaseChannel,
       registryUrl: this.state.registryUrl,
+      harnessHome: this.backups?.harnessHome ?? null,
+      backups,
       nodeVersion: this.nodeVersion,
       latestVersion: this.latestVersion,
       selectedVersion: this.state.selectedVersion,

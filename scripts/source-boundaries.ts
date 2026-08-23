@@ -23,7 +23,9 @@ export function sourceBoundaryViolations(relativeFile: string, content: string):
   const violations: string[] = []
   const specifiers = importSpecifiers(content)
 
-  if (content.includes('DSH_HOME')) violations.push('production source must not override DSH_HOME')
+  const assignsDshHome = /\b(?:process\.env|environment)\.DSH_HOME\s*=/.test(content) || /\bDSH_HOME\s*:/.test(content)
+  if (assignsDshHome) violations.push('production source must not override DSH_HOME')
+  else if (content.includes('DSH_HOME') && file !== 'src/main/harness-home.ts') violations.push('only harness-home may resolve DSH_HOME')
   if (specifiers.some((specifier) => specifier === '@deepseek-ai/dsh' || specifier.startsWith('@deepseek-ai/dsh/'))) {
     violations.push('must not import official DSH source modules')
   }
