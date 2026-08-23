@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, OfficialVersion, ReleaseChannel } from '../shared/contracts'
-import { defaultRegistryUrl, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, resolveLocale } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, OfficialVersion, ProxyMode, ReleaseChannel } from '../shared/contracts'
+import { defaultRegistryUrl, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, proxyModeSchema, proxyUrlSchema, registryUrlSchema, releaseChannelSchema, resolveLocale } from '../shared/contracts'
 import { runProcess } from './process-utils'
 import { DshRegistry } from './registry'
 import type { RuntimePaths } from './runtime-paths'
@@ -15,8 +15,8 @@ import { ExternalInstallationManager } from './external-installations'
 
 export class AppController extends EventEmitter {
   private state: PersistedState = {
-    schemaVersion: 4, selectedVersion: null, selectedExternalId: null, dismissedLatest: null, localePreference: 'system',
-    releaseChannel: 'all', registryUrl: defaultRegistryUrl, closeToTray: true, startAtLogin: false
+    schemaVersion: 5, selectedVersion: null, selectedExternalId: null, dismissedLatest: null, localePreference: 'system',
+    releaseChannel: 'all', registryUrl: defaultRegistryUrl, closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null
   }
   private latestVersion: string | null = null
   private availableVersions: OfficialVersion[] = []
@@ -34,7 +34,8 @@ export class AppController extends EventEmitter {
     private readonly systemLocale: AppLocale = 'zh-CN',
     private readonly switchTransactions: SwitchTransactionStore = new SwitchTransactionStore(path.dirname(store.file)),
     private readonly backups: BackupManager | null = null,
-    private readonly externalInstallations: ExternalInstallationManager | null = null
+    private readonly externalInstallations: ExternalInstallationManager | null = null,
+    private readonly applyNetworkPreferences: ((mode: ProxyMode, manualProxyUrl: string | null) => Promise<void>) | null = null
   ) {
     super()
     supervisor.on('status', () => { void this.emitSnapshot() })
@@ -227,6 +228,17 @@ export class AppController extends EventEmitter {
     return await this.emitSnapshot()
   }
 
+  async setNetworkPreferences(mode: ProxyMode, manualProxyUrl: string | null): Promise<AppSnapshot> {
+    const validatedMode = proxyModeSchema.parse(mode)
+    const validatedUrl = validatedMode === 'manual' ? proxyUrlSchema.parse(manualProxyUrl) : null
+    if (this.applyNetworkPreferences) await this.applyNetworkPreferences(validatedMode, validatedUrl)
+    this.state.proxyMode = validatedMode
+    this.state.manualProxyUrl = validatedUrl
+    await this.store.write(this.state)
+    this.error = null
+    return await this.emitSnapshot()
+  }
+
   isRuntimeActive(): boolean {
     return !['idle', 'failed'].includes(this.supervisor.status)
   }
@@ -251,6 +263,8 @@ export class AppController extends EventEmitter {
       externalInstallations,
       closeToTray: this.state.closeToTray,
       startAtLogin: this.state.startAtLogin,
+      proxyMode: this.state.proxyMode,
+      manualProxyUrl: this.state.manualProxyUrl,
       nodeVersion: this.nodeVersion,
       latestVersion: this.latestVersion,
       selectedVersion: this.state.selectedVersion,

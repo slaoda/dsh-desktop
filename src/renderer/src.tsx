@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, AppUpdateSnapshot, BackupScope, InstallProgress, LocalePreference, ReleaseChannel } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, AppUpdateSnapshot, BackupScope, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel } from '../shared/contracts'
 import deepSeekWhale from './deepseek-whale.svg'
 import { dshRuntimeFailureDetail, isDshRuntimeFailure } from './runtime-error'
 import './style.css'
@@ -11,7 +11,8 @@ const empty: AppSnapshot = {
   appVersion: '0.1.0', nodeVersion: null, latestVersion: null, selectedVersion: null,
   locale: initialLocale, localePreference: 'system', releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org',
   harnessHome: null, backups: [], externalInstallations: [], selectedExternalId: null,
-  closeToTray: true, startAtLogin: false, dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
+  closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null,
+  dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
 }
 const emptyAppUpdate: AppUpdateSnapshot = {
   currentVersion: '0.1.0', availableVersion: null, delivery: 'manual', status: 'idle', percent: null, message: null
@@ -33,10 +34,12 @@ function App(): React.JSX.Element {
   const [errorDetailsExpanded, setErrorDetailsExpanded] = useState(false)
   const [errorCopyState, setErrorCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [registryDraft, setRegistryDraft] = useState(empty.registryUrl)
+  const [proxyModeDraft, setProxyModeDraft] = useState<ProxyMode>(empty.proxyMode)
+  const [proxyUrlDraft, setProxyUrlDraft] = useState('')
   const language = copy(snapshot.locale)
 
   useEffect(() => {
-    void window.dshDesktop.getSnapshot().then((value) => { setSnapshot(value); setRegistryDraft(value.registryUrl); document.documentElement.lang = value.locale; setMessage(copy(value.locale).ready); setBusyAction(null) })
+    void window.dshDesktop.getSnapshot().then((value) => { setSnapshot(value); setRegistryDraft(value.registryUrl); setProxyModeDraft(value.proxyMode); setProxyUrlDraft(value.manualProxyUrl ?? ''); document.documentElement.lang = value.locale; setMessage(copy(value.locale).ready); setBusyAction(null) })
     void window.dshDesktop.getAppUpdate().then(setAppUpdate)
     const removeState = window.dshDesktop.onStateChanged(setSnapshot)
     const removeProgress = window.dshDesktop.onInstallProgress((value) => { setProgress(value); setMessage(value.message) })
@@ -45,6 +48,7 @@ function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => { setRegistryDraft(snapshot.registryUrl) }, [snapshot.registryUrl])
+  useEffect(() => { setProxyModeDraft(snapshot.proxyMode); setProxyUrlDraft(snapshot.manualProxyUrl ?? '') }, [snapshot.proxyMode, snapshot.manualProxyUrl])
 
   useEffect(() => {
     setErrorDetailsExpanded(false)
@@ -164,6 +168,10 @@ function App(): React.JSX.Element {
 
   const setDesktopPreferences = async (closeToTray: boolean, startAtLogin: boolean): Promise<void> => {
     await perform('desktop-preferences', language.savingDesktopPreferences, () => window.dshDesktop.setDesktopPreferences(closeToTray, startAtLogin))
+  }
+
+  const saveNetworkPreferences = async (): Promise<void> => {
+    await perform('network-preferences', language.savingNetworkPreferences, () => window.dshDesktop.setNetworkPreferences(proxyModeDraft, proxyModeDraft === 'manual' ? proxyUrlDraft : null))
   }
 
   return <main className="app-shell">
@@ -317,6 +325,9 @@ function App(): React.JSX.Element {
           <span className="side-heading">{language.desktopPreferences}</span>
           <label><input type="checkbox" checked={snapshot.closeToTray} disabled={busyAction !== null} onChange={(event) => void setDesktopPreferences(event.target.checked, snapshot.startAtLogin)} />{language.closeToTray}</label>
           <label><input type="checkbox" checked={snapshot.startAtLogin} disabled={busyAction !== null} onChange={(event) => void setDesktopPreferences(snapshot.closeToTray, event.target.checked)} />{language.startAtLogin}</label>
+          <label className="network-setting"><span>{language.networkProxy}</span><select value={proxyModeDraft} disabled={busyAction !== null} onChange={(event) => setProxyModeDraft(event.target.value as ProxyMode)}><option value="system">{language.systemProxy}</option><option value="manual">{language.manualProxy}</option></select></label>
+          {proxyModeDraft === 'manual' && <input className="proxy-input" value={proxyUrlDraft} disabled={busyAction !== null} onChange={(event) => setProxyUrlDraft(event.target.value)} placeholder="http://127.0.0.1:7890" aria-label={language.manualProxyAddress} />}
+          <button type="button" className="network-save" disabled={busyAction !== null || (proxyModeDraft === snapshot.proxyMode && (proxyModeDraft !== 'manual' || proxyUrlDraft === (snapshot.manualProxyUrl ?? '')))} onClick={() => void saveNetworkPreferences()}>{language.saveNetwork}</button>
         </section>
       </aside>
 
@@ -456,6 +467,7 @@ function copy(locale: AppLocale) {
     backups: 'Backups', backupUnavailable: 'Backup unavailable', backupConfig: 'Back up config', backupAll: 'Back up all', configOnly: 'Config', configAndSessions: 'Config + sessions', restoreConfig: 'Restore config', restoreAll: 'Restore all', creatingBackup: 'Creating backup…', restoringBackup: 'Restoring backup…', confirmRestore: 'Stop Harness and restore this backup? A safety backup of the current data will be created first.', confirmUninstall: (version: string) => `Uninstall Harness ${version}?`,
     existingInstallations: 'Existing installations', rescan: 'Rescan this computer', scanningInstallations: 'Scanning for existing Harness installations…', readOnly: 'Read-only', inPlace: 'In-place', useInPlace: 'Use', noExistingInstallations: 'No verified existing installations found.',
     desktopPreferences: 'Desktop', closeToTray: 'Close to tray', startAtLogin: 'Start at login', savingDesktopPreferences: 'Saving desktop preferences…',
+    networkProxy: 'Network proxy', systemProxy: 'System / auto', manualProxy: 'Manual', manualProxyAddress: 'Manual proxy address', saveNetwork: 'Apply network', savingNetworkPreferences: 'Applying network proxy…',
     searchVersion: 'Search versions', showPrerelease: 'Show prereleases', refreshVersions: 'Refresh official versions', syncingVersions: 'Syncing official npm versions…',
     versionCount: (count: number) => `${count} version${count === 1 ? '' : 's'}`, latest: 'Latest', inUse: 'In use', switching: 'Switching…', switch: 'Switch', installing: 'Installing…', install: 'Install', uninstalling: 'Uninstalling…', uninstall: 'Uninstall',
     switchingTo: (version: string) => `Switching to ${version}…`, installingVersion: (version: string) => `Installing ${version}…`, uninstallingVersion: (version: string) => `Uninstalling ${version}…`,
@@ -479,6 +491,7 @@ function copy(locale: AppLocale) {
     backups: '备份', backupUnavailable: '备份不可用', backupConfig: '备份配置', backupAll: '完整备份', configOnly: '仅配置', configAndSessions: '配置及会话', restoreConfig: '恢复配置', restoreAll: '全部恢复', creatingBackup: '正在创建备份…', restoringBackup: '正在恢复备份…', confirmRestore: '确定停止 Harness 并恢复这个备份吗？恢复前会先为当前数据创建安全备份。', confirmUninstall: (version: string) => `确定卸载 Harness ${version} 吗？`,
     existingInstallations: '本机既有安装', rescan: '重新扫描本机', scanningInstallations: '正在扫描本机 Harness 安装…', readOnly: '只读', inPlace: '原地管理', useInPlace: '使用', noExistingInstallations: '未发现已验证的既有安装。',
     desktopPreferences: '桌面设置', closeToTray: '关闭到托盘', startAtLogin: '开机启动', savingDesktopPreferences: '正在保存桌面设置…',
+    networkProxy: '网络代理', systemProxy: '系统/自动', manualProxy: '手动', manualProxyAddress: '手动代理地址', saveNetwork: '应用网络设置', savingNetworkPreferences: '正在应用网络代理…',
     searchVersion: '搜索版本号', showPrerelease: '显示预发布版本', refreshVersions: '刷新官方版本', syncingVersions: '正在同步 npm 官方版本…',
     versionCount: (count: number) => `${count} 个版本`, latest: '最新', inUse: '使用中', switching: '切换中…', switch: '切换', installing: '安装中…', install: '安装', uninstalling: '卸载中…', uninstall: '卸载',
     switchingTo: (version: string) => `正在切换到 ${version}…`, installingVersion: (version: string) => `正在安装 ${version}…`, uninstallingVersion: (version: string) => `正在卸载 ${version}…`,

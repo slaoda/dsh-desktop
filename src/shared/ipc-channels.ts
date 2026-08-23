@@ -17,6 +17,7 @@ export const channels = {
   selectExternalInstallation: 'dsh:select-external-installation',
   uninstallExternalInstallation: 'dsh:uninstall-external-installation',
   setDesktopPreferences: 'desktop:set-preferences',
+  setNetworkPreferences: 'desktop:set-network-preferences',
   stateChanged: 'dsh:state-changed',
   installProgress: 'dsh:install-progress',
   appUpdateSnapshot: 'desktop-update:snapshot',

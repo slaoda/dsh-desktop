@@ -45,11 +45,15 @@ export class VersionManager {
     userData: string,
     private readonly bundledDir: string,
     private readonly runtime: RuntimePaths,
-    private readonly proxyUrl: string | null = null,
+    private proxyUrl: string | null = null,
     private readonly installStallTimeoutMs = 5 * 60_000
   ) {
     this.versionsDir = path.join(userData, 'dsh-versions')
     this.installFailureLog = path.join(userData, 'dsh-install-failure.log')
+  }
+
+  setProxyUrl(proxyUrl: string | null): void {
+    this.proxyUrl = proxyUrl
   }
 
   async cleanupInterruptedInstalls(): Promise<void> {

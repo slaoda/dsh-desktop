@@ -5,7 +5,7 @@ const proxyProbePort = 7890
 const proxyTarget = 'https://registry.npmjs.org/'
 const localBypass = '<local>;localhost;127.0.0.1;[::1]'
 
-export type ProxySource = 'environment' | 'system' | 'local' | 'direct'
+export type ProxySource = 'environment' | 'system' | 'local' | 'manual' | 'direct'
 
 export interface ProxyResolution {
   source: ProxySource
@@ -42,7 +42,7 @@ export async function configureNetworkProxy(
 }
 
 export async function applyNetworkProxy(targetSession: ProxySession, resolution: ProxyResolution): Promise<void> {
-  if (resolution.source === 'environment' || resolution.source === 'local') {
+  if (resolution.source === 'environment' || resolution.source === 'local' || resolution.source === 'manual') {
     await targetSession.setProxy({ mode: 'fixed_servers', proxyRules: resolution.url ?? undefined, proxyBypassRules: localBypass })
   } else {
     await targetSession.setProxy({ mode: 'system' })

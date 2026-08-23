@@ -1,10 +1,10 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import writeFileAtomic from 'write-file-atomic'
-import { defaultRegistryUrl, registryUrlSchema, releaseChannelSchema, type LocalePreference, type ReleaseChannel } from '../shared/contracts'
+import { defaultRegistryUrl, proxyModeSchema, proxyUrlSchema, registryUrlSchema, releaseChannelSchema, type LocalePreference, type ProxyMode, type ReleaseChannel } from '../shared/contracts'
 
 export interface PersistedState {
-  schemaVersion: 4
+  schemaVersion: 5
   selectedVersion: string | null
   selectedExternalId: string | null
   dismissedLatest: string | null
@@ -13,10 +13,12 @@ export interface PersistedState {
   registryUrl: string
   closeToTray: boolean
   startAtLogin: boolean
+  proxyMode: ProxyMode
+  manualProxyUrl: string | null
 }
 
 const defaults: PersistedState = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   selectedVersion: null,
   selectedExternalId: null,
   dismissedLatest: null,
@@ -24,7 +26,9 @@ const defaults: PersistedState = {
   releaseChannel: 'all',
   registryUrl: defaultRegistryUrl,
   closeToTray: true,
-  startAtLogin: false
+  startAtLogin: false,
+  proxyMode: 'system',
+  manualProxyUrl: null
 }
 
 export class StateStore {
@@ -38,7 +42,7 @@ export class StateStore {
     try {
       const parsed = JSON.parse(await readFile(this.file, 'utf8')) as Partial<PersistedState>
       return {
-        schemaVersion: 4,
+        schemaVersion: 5,
         selectedVersion: typeof parsed.selectedVersion === 'string' ? parsed.selectedVersion : null,
         selectedExternalId: typeof parsed.selectedExternalId === 'string' && /^[0-9a-f]{16}$/.test(parsed.selectedExternalId) ? parsed.selectedExternalId : null,
         dismissedLatest: typeof parsed.dismissedLatest === 'string' ? parsed.dismissedLatest : null,
@@ -46,7 +50,9 @@ export class StateStore {
         releaseChannel: releaseChannelSchema.safeParse(parsed.releaseChannel).success ? parsed.releaseChannel as ReleaseChannel : 'all',
         registryUrl: registryUrlSchema.safeParse(parsed.registryUrl).success ? registryUrlSchema.parse(parsed.registryUrl) : defaultRegistryUrl,
         closeToTray: typeof parsed.closeToTray === 'boolean' ? parsed.closeToTray : true,
-        startAtLogin: typeof parsed.startAtLogin === 'boolean' ? parsed.startAtLogin : false
+        startAtLogin: typeof parsed.startAtLogin === 'boolean' ? parsed.startAtLogin : false,
+        proxyMode: proxyModeSchema.safeParse(parsed.proxyMode).success ? parsed.proxyMode as ProxyMode : 'system',
+        manualProxyUrl: proxyUrlSchema.safeParse(parsed.manualProxyUrl).success ? proxyUrlSchema.parse(parsed.manualProxyUrl) : null
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error

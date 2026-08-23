@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { channels } from '../shared/ipc-channels'
-import type { AppSnapshot, AppUpdateSnapshot, BackupScope, DesktopApi, InstallProgress, LocalePreference, ReleaseChannel } from '../shared/contracts'
+import type { AppSnapshot, AppUpdateSnapshot, BackupScope, DesktopApi, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel } from '../shared/contracts'
 
 const api: DesktopApi = {
   getSnapshot: () => ipcRenderer.invoke(channels.snapshot),
@@ -21,6 +21,7 @@ const api: DesktopApi = {
   selectExternalInstallation: (id: string) => ipcRenderer.invoke(channels.selectExternalInstallation, id),
   uninstallExternalInstallation: (id: string) => ipcRenderer.invoke(channels.uninstallExternalInstallation, id),
   setDesktopPreferences: (closeToTray: boolean, startAtLogin: boolean) => ipcRenderer.invoke(channels.setDesktopPreferences, closeToTray, startAtLogin),
+  setNetworkPreferences: (mode: ProxyMode, manualProxyUrl: string | null) => ipcRenderer.invoke(channels.setNetworkPreferences, mode, manualProxyUrl),
   getAppUpdate: () => ipcRenderer.invoke(channels.appUpdateSnapshot),
   checkAppUpdate: () => ipcRenderer.invoke(channels.appUpdateCheck),
   downloadAppUpdate: () => ipcRenderer.invoke(channels.appUpdateDownload),

@@ -12,12 +12,14 @@ describe('StateStore', () => {
     directory = await mkdtemp(path.join(os.tmpdir(), 'dsh-state-'))
     const store = new StateStore(directory)
     expect(await store.read()).toEqual({
-      schemaVersion: 4, selectedVersion: null, selectedExternalId: null, dismissedLatest: null, localePreference: 'system',
-      releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org', closeToTray: true, startAtLogin: false
+      schemaVersion: 5, selectedVersion: null, selectedExternalId: null, dismissedLatest: null, localePreference: 'system',
+      releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org', closeToTray: true, startAtLogin: false,
+      proxyMode: 'system', manualProxyUrl: null
     })
     await store.write({
-      schemaVersion: 4, selectedVersion: '0.1.0-rc.6', selectedExternalId: null, dismissedLatest: null, localePreference: 'en-US',
-      releaseChannel: 'all', registryUrl: 'https://registry.example.test/npm', closeToTray: false, startAtLogin: true
+      schemaVersion: 5, selectedVersion: '0.1.0-rc.6', selectedExternalId: null, dismissedLatest: null, localePreference: 'en-US',
+      releaseChannel: 'all', registryUrl: 'https://registry.example.test/npm', closeToTray: false, startAtLogin: true,
+      proxyMode: 'manual', manualProxyUrl: 'http://127.0.0.1:7890'
     })
     expect(JSON.parse(await readFile(store.file, 'utf8'))).toMatchObject({ selectedVersion: '0.1.0-rc.6', localePreference: 'en-US' })
   })
@@ -30,7 +32,7 @@ describe('StateStore', () => {
     delete legacy.localePreference
     await writeFile(store.file, JSON.stringify(legacy))
     expect((await store.read()).localePreference).toBe('system')
-    expect(await store.read()).toMatchObject({ schemaVersion: 4, selectedExternalId: null, releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org', closeToTray: true, startAtLogin: false })
+    expect(await store.read()).toMatchObject({ schemaVersion: 5, selectedExternalId: null, releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org', closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null })
   })
 
   it('丢弃状态文件中的无效渠道和危险镜像地址', async () => {

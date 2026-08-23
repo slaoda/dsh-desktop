@@ -22,6 +22,18 @@ export const clipboardTextSchema = z.string().min(1).max(4_096)
 export const backupScopeSchema = z.enum(['configuration', 'full'])
 export const backupIdSchema = z.string().regex(/^\d{8}T\d{9}Z-[0-9a-f]{8}$/)
 export const externalInstallationIdSchema = z.string().regex(/^[0-9a-f]{16}$/)
+export const proxyModeSchema = z.enum(['system', 'manual'])
+export const proxyUrlSchema = z.string().trim().min(1).max(2_048).superRefine((value, context) => {
+  try {
+    const url = new URL(value)
+    if (!['http:', 'https:', 'socks:', 'socks4:', 'socks5:'].includes(url.protocol)) context.addIssue({ code: 'custom', message: '代理地址协议无效' })
+    if (!url.hostname) context.addIssue({ code: 'custom', message: '代理地址缺少主机名' })
+    if (url.username || url.password) context.addIssue({ code: 'custom', message: '手动代理不能包含用户名或密码，请使用系统代理处理认证' })
+    if ((url.pathname && url.pathname !== '/') || url.search || url.hash) context.addIssue({ code: 'custom', message: '代理地址不能包含路径、查询参数或片段' })
+  } catch {
+    context.addIssue({ code: 'custom', message: '代理地址格式无效' })
+  }
+}).transform((value) => value.replace(/\/$/, ''))
 export const defaultRegistryUrl = 'https://registry.npmjs.org' as const
 
 export type AppLocale = 'zh-CN' | 'en-US'
@@ -29,6 +41,7 @@ export type LocalePreference = z.infer<typeof localePreferenceSchema>
 export type ReleaseChannel = z.infer<typeof releaseChannelSchema>
 export type BackupScope = z.infer<typeof backupScopeSchema>
 export type BackupReason = 'manual' | 'update' | 'pre-restore'
+export type ProxyMode = z.infer<typeof proxyModeSchema>
 
 export interface BackupSummary {
   id: string
@@ -78,6 +91,8 @@ export interface AppSnapshot {
   externalInstallations: ExternalInstallation[]
   closeToTray: boolean
   startAtLogin: boolean
+  proxyMode: ProxyMode
+  manualProxyUrl: string | null
   nodeVersion: string | null
   latestVersion: string | null
   selectedVersion: string | null
@@ -127,6 +142,7 @@ export interface DesktopApi {
   selectExternalInstallation(id: string): Promise<AppSnapshot>
   uninstallExternalInstallation(id: string): Promise<AppSnapshot>
   setDesktopPreferences(closeToTray: boolean, startAtLogin: boolean): Promise<AppSnapshot>
+  setNetworkPreferences(mode: ProxyMode, manualProxyUrl: string | null): Promise<AppSnapshot>
   getAppUpdate(): Promise<AppUpdateSnapshot>
   checkAppUpdate(): Promise<AppUpdateSnapshot>
   downloadAppUpdate(): Promise<AppUpdateSnapshot>

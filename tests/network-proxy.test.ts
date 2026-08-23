@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { applyNetworkProxy, configureNetworkProxy, npmProxyEnvironment, proxyFromElectronRules } from '../src/main/network-proxy'
+import { proxyUrlSchema } from '../src/shared/contracts'
 
 function fakeSession(rules: string) {
   return {
@@ -37,6 +38,14 @@ describe('network proxy', () => {
     const target = fakeSession('DIRECT')
     await applyNetworkProxy(target, { source: 'local', url: 'http://127.0.0.1:7890' })
     expect(target.setProxy).toHaveBeenCalledWith(expect.objectContaining({ proxyRules: 'http://127.0.0.1:7890' }))
+  })
+
+  it('应用手动代理并拒绝把代理凭据写入状态', async () => {
+    const target = fakeSession('DIRECT')
+    await applyNetworkProxy(target, { source: 'manual', url: 'socks5://127.0.0.1:1080' })
+    expect(target.setProxy).toHaveBeenCalledWith(expect.objectContaining({ mode: 'fixed_servers', proxyRules: 'socks5://127.0.0.1:1080' }))
+    expect(proxyUrlSchema.safeParse('http://user:secret@proxy.example:8080').success).toBe(false)
+    expect(proxyUrlSchema.safeParse('socks5://127.0.0.1:1080').success).toBe(true)
   })
 
   it('解析 Chromium 常见代理规则', () => {

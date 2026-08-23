@@ -3,7 +3,7 @@ import electronUpdater from 'electron-updater'
 import os from 'node:os'
 import path from 'node:path'
 import semver from 'semver'
-import { backupIdSchema, backupScopeSchema, channels, clipboardTextSchema, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, type AppLocale, type AppSnapshot, type AppUpdateSnapshot, type InstallProgress, type LocalePreference } from '../shared/contracts'
+import { backupIdSchema, backupScopeSchema, channels, clipboardTextSchema, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, proxyModeSchema, proxyUrlSchema, registryUrlSchema, releaseChannelSchema, type AppLocale, type AppSnapshot, type AppUpdateSnapshot, type InstallProgress, type LocalePreference, type ProxyMode } from '../shared/contracts'
 import { DesktopUpdater } from './app-updater'
 import { applyNetworkProxy, configureNetworkProxy } from './network-proxy'
 import { AppController } from './controller'
@@ -560,6 +560,12 @@ function registerIpc(instance: AppController): void {
     if (typeof rawCloseToTray !== 'boolean' || typeof rawStartAtLogin !== 'boolean') throw new Error('桌面偏好设置无效')
     return await instance.setDesktopPreferences(rawCloseToTray, rawStartAtLogin)
   })
+  ipcMain.handle(channels.setNetworkPreferences, async (event, rawMode: unknown, rawManualProxyUrl: unknown) => {
+    assertManager(event)
+    const mode = proxyModeSchema.parse(rawMode)
+    const manualProxyUrl = mode === 'manual' ? proxyUrlSchema.parse(rawManualProxyUrl) : null
+    return await instance.setNetworkPreferences(mode, manualProxyUrl)
+  })
   ipcMain.handle(channels.appUpdateSnapshot, (event) => {
     assertManager(event)
     return desktopUpdater?.snapshot()
@@ -592,6 +598,12 @@ app.whenReady().then(async () => {
   const runtime = resolveRuntimePaths(resourcesRoot, app.isPackaged)
   const store = new StateStore(app.getPath('userData'))
   const versions = new VersionManager(app.getPath('userData'), path.join(resourcesRoot, 'dsh'), runtime, proxy.url)
+  const applyProxyPreferences = async (mode: ProxyMode, manualProxyUrl: string | null): Promise<void> => {
+    const resolution = mode === 'manual' ? { source: 'manual' as const, url: proxyUrlSchema.parse(manualProxyUrl) } : proxy
+    await applyNetworkProxy(session.defaultSession, resolution)
+    await applyNetworkProxy(electronUpdater.autoUpdater.netSession, resolution)
+    versions.setProxyUrl(resolution.url)
+  }
   const externalInstallations = new ExternalInstallationManager(runtime)
   let backupManager: BackupManager | null = null
   try {
@@ -604,7 +616,7 @@ app.whenReady().then(async () => {
   const updateSupported = app.isPackaged || TEST_ENABLE_UPDATE === '1'
   controller = new AppController(
     currentAppVersion, store, new DshRegistry(net.fetch as typeof fetch), versions, supervisor, runtime,
-    normalizeSystemLocale(app.getLocale()), undefined, backupManager, externalInstallations
+    normalizeSystemLocale(app.getLocale()), undefined, backupManager, externalInstallations, applyProxyPreferences
   )
   desktopUpdater = new DesktopUpdater(
     electronUpdater.autoUpdater,
@@ -637,6 +649,7 @@ app.whenReady().then(async () => {
   controller.on('progress', (progress: InstallProgress) => sendToManager(channels.installProgress, progress))
   registerIpc(controller)
   const initialSnapshot = await controller.initialize()
+  await applyProxyPreferences(initialSnapshot.proxyMode, initialSnapshot.manualProxyUrl)
   applyDesktopPreferences(initialSnapshot)
   activeLocale = initialSnapshot.locale
   activeLocalePreference = initialSnapshot.localePreference
