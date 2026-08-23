@@ -1,10 +1,16 @@
 import { spawn } from 'node:child_process'
 
+export interface ProcessResult {
+  stdout: string
+  stderr: string
+  code?: number
+}
+
 export async function runProcess(
   executable: string,
   args: string[],
   options: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}
-): Promise<{ stdout: string; stderr: string }> {
+): Promise<ProcessResult> {
   return await new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       cwd: options.cwd,

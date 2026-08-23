@@ -2,19 +2,20 @@ import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import semver from 'semver'
 import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, OfficialVersion, ReleaseChannel } from '../shared/contracts'
-import { defaultRegistryUrl, exactVersionSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, resolveLocale } from '../shared/contracts'
+import { defaultRegistryUrl, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, resolveLocale } from '../shared/contracts'
 import { runProcess } from './process-utils'
 import { DshRegistry } from './registry'
 import type { RuntimePaths } from './runtime-paths'
 import { StateStore, type PersistedState } from './state-store'
 import { SwitchTransactionStore } from './switch-transaction'
 import { DshSupervisor } from './dsh-supervisor'
-import { VersionManager } from './version-manager'
+import { VersionManager, type ResolvedDsh } from './version-manager'
 import { BackupManager } from './backup-manager'
+import { ExternalInstallationManager } from './external-installations'
 
 export class AppController extends EventEmitter {
   private state: PersistedState = {
-    schemaVersion: 2, selectedVersion: null, dismissedLatest: null, localePreference: 'system',
+    schemaVersion: 3, selectedVersion: null, selectedExternalId: null, dismissedLatest: null, localePreference: 'system',
     releaseChannel: 'all', registryUrl: defaultRegistryUrl
   }
   private latestVersion: string | null = null
@@ -32,7 +33,8 @@ export class AppController extends EventEmitter {
     private readonly runtime: RuntimePaths,
     private readonly systemLocale: AppLocale = 'zh-CN',
     private readonly switchTransactions: SwitchTransactionStore = new SwitchTransactionStore(path.dirname(store.file)),
-    private readonly backups: BackupManager | null = null
+    private readonly backups: BackupManager | null = null,
+    private readonly externalInstallations: ExternalInstallationManager | null = null
   ) {
     super()
     supervisor.on('status', () => { void this.emitSnapshot() })
@@ -41,6 +43,11 @@ export class AppController extends EventEmitter {
   async initialize(): Promise<AppSnapshot> {
     this.state = await this.store.read()
     await this.versions.cleanupInterruptedInstalls()
+    if (this.externalInstallations) {
+      try { await this.externalInstallations.refresh() } catch (error) {
+        this.error = error instanceof Error ? `检测既有 Harness 安装失败：${error.message}` : '检测既有 Harness 安装失败'
+      }
+    }
     await this.recoverInterruptedSwitch()
     try {
       const result = await runProcess(this.runtime.node, ['--version'], { timeoutMs: 5_000 })
@@ -94,7 +101,7 @@ export class AppController extends EventEmitter {
   async uninstall(version: string): Promise<AppSnapshot> {
     if (this.versionOperationInProgress) throw new Error('已有 DSH 版本操作正在进行')
     exactVersionSchema.parse(version)
-    if (this.state.selectedVersion === version) throw new Error('无法卸载当前使用的 DSH 版本，请先切换到其他版本')
+    if (!this.state.selectedExternalId && this.state.selectedVersion === version) throw new Error('无法卸载当前使用的 DSH 版本，请先切换到其他版本')
     this.versionOperationInProgress = true
     try {
       await this.versions.uninstall(version)
@@ -114,6 +121,7 @@ export class AppController extends EventEmitter {
     if (this.supervisor.status !== 'idle' && this.supervisor.status !== 'failed') throw new Error('请先停止正在运行的 DSH')
     await this.versions.resolve(version)
     this.state.selectedVersion = version
+    this.state.selectedExternalId = null
     await this.store.write(this.state)
     this.error = null
     return await this.emitSnapshot()
@@ -121,52 +129,14 @@ export class AppController extends EventEmitter {
 
   async switchAndLaunch(version: string): Promise<AppSnapshot> {
     exactVersionSchema.parse(version)
-    if (this.state.selectedVersion === version && this.supervisor.status === 'running') return await this.snapshot()
     const candidate = await this.versions.resolve(version)
-    const previousVersion = this.state.selectedVersion
-    if (this.isRuntimeActive()) await this.supervisor.stop()
-    if (previousVersion && previousVersion !== version && this.backups && await this.backups.hasSource()) {
-      try {
-        await this.backups.create('update', 'full')
-      } catch (backupError) {
-        const detail = backupError instanceof Error ? backupError.message : '备份失败'
-        try { await this.supervisor.start(await this.versions.resolve(previousVersion)) } catch { /* Snapshot reports the stopped/failed runtime. */ }
-        this.error = `切换到 ${version} 前的安全备份失败，已取消切换：${detail}`
-        return await this.emitSnapshot()
-      }
-    }
-    await this.switchTransactions.begin(previousVersion, version)
-    try {
-      await this.supervisor.start(candidate)
-      this.state.selectedVersion = version
-      await this.store.write(this.state)
-      await this.switchTransactions.complete()
-      this.error = null
-    } catch (candidateError) {
-      this.state.selectedVersion = previousVersion
-      await this.store.write(this.state)
-      await this.switchTransactions.complete()
-      const detail = candidateError instanceof Error ? candidateError.message : '候选版本启动失败'
-      if (previousVersion) {
-        try {
-          const previous = await this.versions.resolve(previousVersion)
-          await this.supervisor.start(previous)
-          this.error = `新版本 ${version} 启动失败，已自动回退到 ${previousVersion}：${detail}`
-        } catch (rollbackError) {
-          const rollbackDetail = rollbackError instanceof Error ? rollbackError.message : '旧版本启动失败'
-          this.error = `新版本 ${version} 启动失败，选择已恢复到 ${previousVersion}，但旧版本未能启动：${detail}；${rollbackDetail}`
-        }
-      } else {
-        this.error = `新版本 ${version} 启动失败：${detail}`
-      }
-    }
-    return await this.emitSnapshot()
+    return await this.switchResolvedAndLaunch(candidate, null)
   }
 
   async launch(): Promise<AppSnapshot> {
     if (!this.state.selectedVersion) throw new Error('请先安装并选择一个 DSH 版本')
     try {
-      const resolved = await this.versions.resolve(this.state.selectedVersion)
+      const resolved = await this.resolveSelection(this.state.selectedVersion, this.state.selectedExternalId)
       await this.supervisor.start(resolved)
       this.error = null
     } catch (error) {
@@ -223,6 +193,32 @@ export class AppController extends EventEmitter {
     return await this.emitSnapshot()
   }
 
+  async refreshExternalInstallations(): Promise<AppSnapshot> {
+    if (!this.externalInstallations) throw new Error('既有 Harness 安装检测不可用')
+    await this.externalInstallations.refresh()
+    await this.ensureSelection()
+    this.error = null
+    return await this.emitSnapshot()
+  }
+
+  async selectExternalInstallation(id: string): Promise<AppSnapshot> {
+    if (!this.externalInstallations) throw new Error('既有 Harness 安装检测不可用')
+    const validatedId = externalInstallationIdSchema.parse(id)
+    const item = this.externalInstallations.list().find((candidate) => candidate.id === validatedId)
+    if (!item) throw new Error('既有 Harness 安装不存在或尚未通过验证')
+    if (item.readOnly) throw new Error(item.reason ?? '该既有 Harness 安装仅供查看')
+    return await this.switchResolvedAndLaunch(await this.externalInstallations.resolve(validatedId), validatedId)
+  }
+
+  async uninstallExternalInstallation(id: string): Promise<AppSnapshot> {
+    if (!this.externalInstallations) throw new Error('既有 Harness 安装检测不可用')
+    const validatedId = externalInstallationIdSchema.parse(id)
+    if (this.state.selectedExternalId === validatedId) throw new Error('无法卸载当前使用的既有 Harness，请先切换到其他版本')
+    await this.externalInstallations.uninstall(validatedId)
+    this.error = null
+    return await this.emitSnapshot()
+  }
+
   isRuntimeActive(): boolean {
     return !['idle', 'failed'].includes(this.supervisor.status)
   }
@@ -235,6 +231,7 @@ export class AppController extends EventEmitter {
     const installedVersions = (await this.versions.list()).sort((a, b) => semver.rcompare(a.version, b.version))
     const availableVersions = [...this.availableVersions].sort((a, b) => semver.rcompare(a.version, b.version))
     const backups = this.backups ? await this.backups.list() : []
+    const externalInstallations = this.externalInstallations?.list() ?? []
     return {
       appVersion: this.appVersion,
       locale: resolveLocale(this.state.localePreference, this.systemLocale),
@@ -243,9 +240,11 @@ export class AppController extends EventEmitter {
       registryUrl: this.state.registryUrl,
       harnessHome: this.backups?.harnessHome ?? null,
       backups,
+      externalInstallations,
       nodeVersion: this.nodeVersion,
       latestVersion: this.latestVersion,
       selectedVersion: this.state.selectedVersion,
+      selectedExternalId: this.state.selectedExternalId,
       dismissedLatest: this.state.dismissedLatest,
       installedVersions,
       availableVersions,
@@ -256,9 +255,19 @@ export class AppController extends EventEmitter {
   }
 
   private async ensureSelection(): Promise<void> {
+    if (this.state.selectedExternalId && this.externalInstallations) {
+      const selected = this.externalInstallations.list().find((item) => item.id === this.state.selectedExternalId && !item.readOnly)
+      if (selected) {
+        this.state.selectedVersion = selected.version
+        await this.store.write(this.state)
+        return
+      }
+      this.state.selectedExternalId = null
+    }
     const versions = await this.versions.list()
     if (this.state.selectedVersion && versions.some((item) => item.version === this.state.selectedVersion)) return
     this.state.selectedVersion = versions.sort((a, b) => semver.rcompare(a.version, b.version))[0]?.version ?? null
+    this.state.selectedExternalId = null
     await this.store.write(this.state)
   }
 
@@ -266,11 +275,64 @@ export class AppController extends EventEmitter {
     const pending = await this.switchTransactions.read()
     if (!pending) return
     this.state.selectedVersion = pending.previousVersion
+    this.state.selectedExternalId = pending.previousExternalId
     await this.store.write(this.state)
     await this.switchTransactions.complete()
     this.error = pending.previousVersion
       ? `检测到未完成的版本切换，已恢复到 ${pending.previousVersion}`
       : '检测到未完成的首次版本启动，未提交候选版本'
+  }
+
+  private async resolveSelection(version: string, externalId: string | null): Promise<ResolvedDsh> {
+    if (externalId) {
+      if (!this.externalInstallations) throw new Error('当前既有 Harness 安装管理器不可用')
+      return await this.externalInstallations.resolve(externalId)
+    }
+    return await this.versions.resolve(version)
+  }
+
+  private async switchResolvedAndLaunch(candidate: ResolvedDsh, candidateExternalId: string | null): Promise<AppSnapshot> {
+    const previousVersion = this.state.selectedVersion
+    const previousExternalId = this.state.selectedExternalId
+    if (previousVersion === candidate.version && previousExternalId === candidateExternalId && this.supervisor.status === 'running') return await this.snapshot()
+    if (this.isRuntimeActive()) await this.supervisor.stop()
+    if (previousVersion && (previousVersion !== candidate.version || previousExternalId !== candidateExternalId) && this.backups && await this.backups.hasSource()) {
+      try {
+        await this.backups.create('update', 'full')
+      } catch (backupError) {
+        const detail = backupError instanceof Error ? backupError.message : '备份失败'
+        try { await this.supervisor.start(await this.resolveSelection(previousVersion, previousExternalId)) } catch { /* Snapshot reports the stopped/failed runtime. */ }
+        this.error = `切换到 ${candidate.version} 前的安全备份失败，已取消切换：${detail}`
+        return await this.emitSnapshot()
+      }
+    }
+    await this.switchTransactions.begin(previousVersion, candidate.version, previousExternalId, candidateExternalId)
+    try {
+      await this.supervisor.start(candidate)
+      this.state.selectedVersion = candidate.version
+      this.state.selectedExternalId = candidateExternalId
+      await this.store.write(this.state)
+      await this.switchTransactions.complete()
+      this.error = null
+    } catch (candidateError) {
+      this.state.selectedVersion = previousVersion
+      this.state.selectedExternalId = previousExternalId
+      await this.store.write(this.state)
+      await this.switchTransactions.complete()
+      const detail = candidateError instanceof Error ? candidateError.message : '候选版本启动失败'
+      if (previousVersion) {
+        try {
+          await this.supervisor.start(await this.resolveSelection(previousVersion, previousExternalId))
+          this.error = `新版本 ${candidate.version} 启动失败，已自动回退到 ${previousVersion}：${detail}`
+        } catch (rollbackError) {
+          const rollbackDetail = rollbackError instanceof Error ? rollbackError.message : '旧版本启动失败'
+          this.error = `新版本 ${candidate.version} 启动失败，选择已恢复到 ${previousVersion}，但旧版本未能启动：${detail}；${rollbackDetail}`
+        }
+      } else {
+        this.error = `新版本 ${candidate.version} 启动失败：${detail}`
+      }
+    }
+    return await this.emitSnapshot()
   }
 
   private async emitSnapshot(): Promise<AppSnapshot> {

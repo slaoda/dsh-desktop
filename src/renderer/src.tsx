@@ -10,7 +10,8 @@ const initialLocale: AppLocale = navigator.language.toLowerCase().startsWith('zh
 const empty: AppSnapshot = {
   appVersion: '0.1.0', nodeVersion: null, latestVersion: null, selectedVersion: null,
   locale: initialLocale, localePreference: 'system', releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org',
-  harnessHome: null, backups: [], dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
+  harnessHome: null, backups: [], externalInstallations: [], selectedExternalId: null,
+  dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
 }
 const emptyAppUpdate: AppUpdateSnapshot = {
   currentVersion: '0.1.0', availableVersion: null, delivery: 'manual', status: 'idle', percent: null, message: null
@@ -152,6 +153,15 @@ function App(): React.JSX.Element {
     await perform(`restore:${id}:${scope}`, language.restoringBackup, () => window.dshDesktop.restoreBackup(id, scope))
   }
 
+  const selectExternalInstallation = async (id: string, version: string): Promise<void> => {
+    await perform(`external-select:${id}`, language.switchingTo(version), () => window.dshDesktop.selectExternalInstallation(id))
+  }
+
+  const uninstallExternalInstallation = async (id: string, version: string): Promise<void> => {
+    if (!window.confirm(language.confirmUninstall(version))) return
+    await perform(`external-uninstall:${id}`, language.uninstallingVersion(version), () => window.dshDesktop.uninstallExternalInstallation(id))
+  }
+
   return <main className="app-shell">
     <header className="topbar">
       <div className="brand-mark" aria-hidden="true"><img src={deepSeekWhale} alt="" /></div>
@@ -291,6 +301,14 @@ function App(): React.JSX.Element {
           <div className="backup-actions"><button type="button" disabled={busyAction !== null || running || !snapshot.harnessHome} onClick={() => void createBackup('configuration')}>{language.backupConfig}</button><button type="button" disabled={busyAction !== null || running || !snapshot.harnessHome} onClick={() => void createBackup('full')}>{language.backupAll}</button></div>
           <div className="backup-list">{snapshot.backups.map((backup) => <article key={backup.id}><span>{formatDate(backup.createdAt, snapshot.locale)} · {backup.scope === 'full' ? language.configAndSessions : language.configOnly}</span><div><button type="button" disabled={busyAction !== null || running} onClick={() => void restoreBackup(backup.id, 'configuration')}>{language.restoreConfig}</button>{backup.scope === 'full' && <button type="button" disabled={busyAction !== null || running} onClick={() => void restoreBackup(backup.id, 'full')}>{language.restoreAll}</button>}</div></article>)}</div>
         </section>
+        <section className="external-panel" aria-label={language.existingInstallations}>
+          <div className="external-heading"><span className="side-heading">{language.existingInstallations}</span><button type="button" title={language.rescan} aria-label={language.rescan} disabled={busyAction !== null} onClick={() => void perform('external-refresh', language.scanningInstallations, window.dshDesktop.refreshExternalInstallations)}><RefreshIcon /></button></div>
+          <div className="external-list">{snapshot.externalInstallations.map((item) => <article key={item.id} className={snapshot.selectedExternalId === item.id ? 'is-current' : ''}>
+            <strong>Harness {item.version}</strong><span>{externalSourceLabel(item.source, snapshot.locale)} · {item.readOnly ? language.readOnly : language.inPlace}</span><small title={item.packageRoot}>{item.packageRoot}</small>{item.reason && <em>{localizeMessage(snapshot.locale, item.reason)}</em>}
+            <div>{!item.readOnly && snapshot.selectedExternalId !== item.id && <button type="button" disabled={busyAction !== null} onClick={() => void selectExternalInstallation(item.id, item.version)}>{language.useInPlace}</button>}{snapshot.selectedExternalId === item.id && <b>{language.inUse}</b>}{item.canUninstall && snapshot.selectedExternalId !== item.id && <button type="button" disabled={busyAction !== null} onClick={() => void uninstallExternalInstallation(item.id, item.version)}>{language.uninstall}</button>}</div>
+          </article>)}</div>
+          {snapshot.externalInstallations.length === 0 && <small>{language.noExistingInstallations}</small>}
+        </section>
       </aside>
 
       <div className="version-content">
@@ -349,6 +367,12 @@ function formatDate(value: string | null, locale: AppLocale): string {
 function statusText(status: AppSnapshot['runtimeStatus'], locale: AppLocale): string {
   const language = copy(locale)
   return ({ idle: language.notRunning, starting: language.starting, running: language.dshRunning, stopping: language.stopping, failed: language.runtimeError })[status]
+}
+function externalSourceLabel(source: AppSnapshot['externalInstallations'][number]['source'], locale: AppLocale): string {
+  const labels = locale === 'zh-CN'
+    ? { environment: 'DSH_BIN', 'npm-global': 'npm 全局', path: 'PATH', project: '项目依赖' }
+    : { environment: 'DSH_BIN', 'npm-global': 'Global npm', path: 'PATH', project: 'Project dependency' }
+  return labels[source]
 }
 function appUpdateText(update: AppUpdateSnapshot, locale: AppLocale): string {
   const language = copy(locale)
@@ -421,6 +445,7 @@ function copy(locale: AppLocale) {
     versionSource: 'Version source', officialNpm: 'Official npm registry', officialNpmShort: 'Official npm', onlyOfficialLine1: 'Installs and runs only', onlyOfficialLine2: 'official DSH packages',
     registryAddress: 'Registry address', save: 'Save', releaseChannel: 'Channel', stable: 'Stable', preview: 'Preview', allChannels: 'All', savingVersionPreferences: 'Saving version source settings…',
     backups: 'Backups', backupUnavailable: 'Backup unavailable', backupConfig: 'Back up config', backupAll: 'Back up all', configOnly: 'Config', configAndSessions: 'Config + sessions', restoreConfig: 'Restore config', restoreAll: 'Restore all', creatingBackup: 'Creating backup…', restoringBackup: 'Restoring backup…', confirmRestore: 'Stop Harness and restore this backup? A safety backup of the current data will be created first.', confirmUninstall: (version: string) => `Uninstall Harness ${version}?`,
+    existingInstallations: 'Existing installations', rescan: 'Rescan this computer', scanningInstallations: 'Scanning for existing Harness installations…', readOnly: 'Read-only', inPlace: 'In-place', useInPlace: 'Use', noExistingInstallations: 'No verified existing installations found.',
     searchVersion: 'Search versions', showPrerelease: 'Show prereleases', refreshVersions: 'Refresh official versions', syncingVersions: 'Syncing official npm versions…',
     versionCount: (count: number) => `${count} version${count === 1 ? '' : 's'}`, latest: 'Latest', inUse: 'In use', switching: 'Switching…', switch: 'Switch', installing: 'Installing…', install: 'Install', uninstalling: 'Uninstalling…', uninstall: 'Uninstall',
     switchingTo: (version: string) => `Switching to ${version}…`, installingVersion: (version: string) => `Installing ${version}…`, uninstallingVersion: (version: string) => `Uninstalling ${version}…`,
@@ -442,6 +467,7 @@ function copy(locale: AppLocale) {
     versionSource: '版本来源', officialNpm: 'npm 官方源', officialNpmShort: '官方 npm', onlyOfficialLine1: '仅安装并运行', onlyOfficialLine2: '官方 DSH 包',
     registryAddress: '镜像地址', save: '保存', releaseChannel: '渠道', stable: '稳定版', preview: '预览版', allChannels: '全部', savingVersionPreferences: '正在保存版本源设置…',
     backups: '备份', backupUnavailable: '备份不可用', backupConfig: '备份配置', backupAll: '完整备份', configOnly: '仅配置', configAndSessions: '配置及会话', restoreConfig: '恢复配置', restoreAll: '全部恢复', creatingBackup: '正在创建备份…', restoringBackup: '正在恢复备份…', confirmRestore: '确定停止 Harness 并恢复这个备份吗？恢复前会先为当前数据创建安全备份。', confirmUninstall: (version: string) => `确定卸载 Harness ${version} 吗？`,
+    existingInstallations: '本机既有安装', rescan: '重新扫描本机', scanningInstallations: '正在扫描本机 Harness 安装…', readOnly: '只读', inPlace: '原地管理', useInPlace: '使用', noExistingInstallations: '未发现已验证的既有安装。',
     searchVersion: '搜索版本号', showPrerelease: '显示预发布版本', refreshVersions: '刷新官方版本', syncingVersions: '正在同步 npm 官方版本…',
     versionCount: (count: number) => `${count} 个版本`, latest: '最新', inUse: '使用中', switching: '切换中…', switch: '切换', installing: '安装中…', install: '安装', uninstalling: '卸载中…', uninstall: '卸载',
     switchingTo: (version: string) => `正在切换到 ${version}…`, installingVersion: (version: string) => `正在安装 ${version}…`, uninstallingVersion: (version: string) => `正在卸载 ${version}…`,

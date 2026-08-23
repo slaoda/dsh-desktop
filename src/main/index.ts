@@ -3,7 +3,7 @@ import electronUpdater from 'electron-updater'
 import os from 'node:os'
 import path from 'node:path'
 import semver from 'semver'
-import { backupIdSchema, backupScopeSchema, channels, clipboardTextSchema, exactVersionSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, type AppLocale, type AppSnapshot, type AppUpdateSnapshot, type InstallProgress, type LocalePreference } from '../shared/contracts'
+import { backupIdSchema, backupScopeSchema, channels, clipboardTextSchema, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, registryUrlSchema, releaseChannelSchema, type AppLocale, type AppSnapshot, type AppUpdateSnapshot, type InstallProgress, type LocalePreference } from '../shared/contracts'
 import { DesktopUpdater } from './app-updater'
 import { applyNetworkProxy, configureNetworkProxy } from './network-proxy'
 import { AppController } from './controller'
@@ -14,6 +14,7 @@ import { StateStore } from './state-store'
 import { VersionManager } from './version-manager'
 import { BackupManager } from './backup-manager'
 import { resolveHarnessHome } from './harness-home'
+import { ExternalInstallationManager } from './external-installations'
 
 const APP_NAME = 'DSH Desktop'
 const RELEASE_DOWNLOAD_URL = 'https://github.com/qufei1993/dsh-desktop/releases/latest'
@@ -480,6 +481,21 @@ function registerIpc(instance: AppController): void {
     assertManager(event)
     return await instance.restoreBackup(backupIdSchema.parse(rawId), backupScopeSchema.parse(rawScope))
   })
+  ipcMain.handle(channels.refreshExternalInstallations, async (event) => {
+    assertManager(event)
+    return await instance.refreshExternalInstallations()
+  })
+  ipcMain.handle(channels.selectExternalInstallation, async (event, rawId: unknown) => {
+    assertManager(event)
+    const snapshot = await instance.selectExternalInstallation(externalInstallationIdSchema.parse(rawId))
+    if (!snapshot.runtimeUrl) throw new Error('既有 Harness 未返回本地地址')
+    await openDshWindow(snapshot.runtimeUrl)
+    return snapshot
+  })
+  ipcMain.handle(channels.uninstallExternalInstallation, async (event, rawId: unknown) => {
+    assertManager(event)
+    return await instance.uninstallExternalInstallation(externalInstallationIdSchema.parse(rawId))
+  })
   ipcMain.handle(channels.appUpdateSnapshot, (event) => {
     assertManager(event)
     return desktopUpdater?.snapshot()
@@ -512,6 +528,7 @@ app.whenReady().then(async () => {
   const runtime = resolveRuntimePaths(resourcesRoot, app.isPackaged)
   const store = new StateStore(app.getPath('userData'))
   const versions = new VersionManager(app.getPath('userData'), path.join(resourcesRoot, 'dsh'), runtime, proxy.url)
+  const externalInstallations = new ExternalInstallationManager(runtime)
   let backupManager: BackupManager | null = null
   try {
     backupManager = new BackupManager(app.getPath('userData'), resolveHarnessHome(process.env, os.homedir()))
@@ -523,7 +540,7 @@ app.whenReady().then(async () => {
   const updateSupported = app.isPackaged || TEST_ENABLE_UPDATE === '1'
   controller = new AppController(
     currentAppVersion, store, new DshRegistry(net.fetch as typeof fetch), versions, supervisor, runtime,
-    normalizeSystemLocale(app.getLocale()), undefined, backupManager
+    normalizeSystemLocale(app.getLocale()), undefined, backupManager, externalInstallations
   )
   desktopUpdater = new DesktopUpdater(
     electronUpdater.autoUpdater,

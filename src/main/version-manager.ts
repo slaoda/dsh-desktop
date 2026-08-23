@@ -34,7 +34,7 @@ export interface ResolvedDsh {
   version: string
   root: string
   entry: string
-  source: 'bundled' | 'installed'
+  source: 'bundled' | 'installed' | 'external'
 }
 
 export class VersionManager {

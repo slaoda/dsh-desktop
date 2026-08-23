@@ -6,7 +6,7 @@ English (authoritative AI instructions) | [简体中文（人工审阅）](AGENT
 
 - DSH Desktop is a community Electron shell for the official `@deepseek-ai/dsh` package on macOS and Windows.
 - Keep official DSH unchanged: do not fork, patch, rebuild, inject into, or import private modules from it. Configuration, sessions, plugins, Skills, MCP, permissions, and user data remain user-owned; the manager may copy the explicitly allowlisted non-credential categories only for a user-requested backup/restore or a recoverable version switch.
-- The desktop app owns only its bundled runtime, exact official DSH installations, application state, process supervision, Desktop-owned windows, application update channel, transaction journals, and manager-created backup archives.
+- The desktop app owns only its bundled runtime, application-managed exact official DSH installations, validated descriptors for user-owned external installations, application state, process supervision, Desktop-owned windows, application update channel, transaction journals, and manager-created backup archives. It never claims ownership of an external package directory.
 - Keep official DSH package updates and DSH Desktop application updates separate and user-controlled. Never install, select, switch, or replace a DSH version without an explicit user action.
 
 ## Architecture invariants
@@ -53,7 +53,7 @@ build-resources/ Downloaded/generated runtime and official DSH resources; never 
 - Spawn child processes with absolute executable paths, `shell: false`, and platform-aware environment handling. Preserve cleanup across startup failure, timeout, cancellation, normal stop, and unexpected exit.
 - Accept a DSH URL only after parsing an explicit `http://127.0.0.1:<port>` endpoint and completing the health check. Create the DSH window only after readiness succeeds.
 - Install only exact valid SemVer versions of the official package. Install into an application-owned temporary directory, validate the package and CLI, and publish through an atomic same-filesystem rename.
-- Failed, cancelled, or interrupted installation must not damage an installed version. Uninstall only complete version directories owned by DSH Desktop and never touch official DSH user data.
+- Failed, cancelled, or interrupted installation must not damage an installed version. Delete directly only complete version directories owned by DSH Desktop. A verified npm-global external installation may be uninstalled only by delegating an explicit global uninstall to the bundled package manager with its validated prefix; project-local and ambiguous PATH installations stay read-only. Never touch official DSH user data during uninstall.
 - Installing a version does not select or launch it unless the user explicitly requested that combined action. Keep previous complete versions available for user-controlled rollback.
 
 ## Security and platform rules

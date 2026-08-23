@@ -120,6 +120,20 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(65,118,230,.
 .backup-list { display: grid; gap: 6px; max-height: 146px; overflow: auto; }
 .backup-list article { display: grid; gap: 5px; padding: 7px; border: 1px solid var(--line); border-radius: 7px; background: rgba(255,255,255,.55); }
 .backup-list article > span { color: #5f6469; font-size: 9px; }
+.external-panel { display: grid; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.external-heading { display: flex; align-items: center; justify-content: space-between; }
+.external-heading button { width: 25px; height: 25px; border: 0; background: transparent; color: #656a70; cursor: pointer; }
+.external-heading button svg { width: 14px; }
+.external-list { display: grid; gap: 6px; max-height: 190px; overflow: auto; }
+.external-list article { display: grid; gap: 3px; padding: 7px; border: 1px solid var(--line); border-radius: 7px; background: rgba(255,255,255,.55); }
+.external-list article.is-current { border-color: #7aa188; background: #f2f8f3; }
+.external-list article strong { font-size: 10px; }
+.external-list article span, .external-list article small, .external-list article em { overflow: hidden; color: #666b70; font-size: 8px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.external-list article em { color: #9a642b; white-space: normal; }
+.external-list article div { display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+.external-list article button { border: 1px solid var(--line); border-radius: 5px; background: #fff; padding: 4px 7px; color: var(--ink); font-size: 8px; cursor: pointer; }
+.external-list article b { color: var(--forest-2); font-size: 8px; }
+.external-panel > small { color: #777b80; font-size: 9px; }
 .search { display: flex; align-items: center; flex: 1; min-width: 160px; height: 36px; padding: 0 11px; border: 1px solid #d9ddd6; border-radius: 9px; color: #929891; background: rgba(255,255,255,.72); }
 .search:focus-within { border-color: #8db3ff; box-shadow: 0 0 0 3px rgba(65,118,230,.08); }
 .search svg { flex: 0 0 auto; width: 15px; height: 15px; }

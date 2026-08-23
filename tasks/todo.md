@@ -8,8 +8,8 @@
 - [x] Interrupted switch transaction is recoverable.
 - [x] Automatic and manual backups exclude credentials and retain three copies.
 - [x] Selective restore supports configuration-only and sessions.
-- [ ] Existing installations are detected and ownership-classified.
-- [ ] Project-local installations are read-only.
+- [x] Existing installations are detected and ownership-classified.
+- [x] Project-local installations are read-only.
 - [ ] Running versions cannot be uninstalled.
 - [ ] GUI exposes the supported flows in Simplified Chinese and English.
 - [ ] Windows installer allows a custom application directory.

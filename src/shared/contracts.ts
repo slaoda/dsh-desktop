@@ -21,6 +21,7 @@ export const registryUrlSchema = z.string().trim().min(1).max(2_048).superRefine
 export const clipboardTextSchema = z.string().min(1).max(4_096)
 export const backupScopeSchema = z.enum(['configuration', 'full'])
 export const backupIdSchema = z.string().regex(/^\d{8}T\d{9}Z-[0-9a-f]{8}$/)
+export const externalInstallationIdSchema = z.string().regex(/^[0-9a-f]{16}$/)
 export const defaultRegistryUrl = 'https://registry.npmjs.org' as const
 
 export type AppLocale = 'zh-CN' | 'en-US'
@@ -36,6 +37,18 @@ export interface BackupSummary {
   scope: BackupScope
   fileCount: number
   bytes: number
+}
+
+export type ExternalInstallationSource = 'environment' | 'npm-global' | 'path' | 'project'
+
+export interface ExternalInstallation {
+  id: string
+  version: string
+  packageRoot: string
+  source: ExternalInstallationSource
+  readOnly: boolean
+  canUninstall: boolean
+  reason: string | null
 }
 
 export function resolveLocale(preference: LocalePreference, systemLocale: AppLocale): AppLocale {
@@ -62,9 +75,11 @@ export interface AppSnapshot {
   registryUrl: string
   harnessHome: string | null
   backups: BackupSummary[]
+  externalInstallations: ExternalInstallation[]
   nodeVersion: string | null
   latestVersion: string | null
   selectedVersion: string | null
+  selectedExternalId: string | null
   dismissedLatest: string | null
   installedVersions: InstalledVersion[]
   availableVersions: OfficialVersion[]
@@ -106,6 +121,9 @@ export interface DesktopApi {
   setVersionPreferences(channel: ReleaseChannel, registryUrl: string): Promise<AppSnapshot>
   createBackup(scope: BackupScope): Promise<AppSnapshot>
   restoreBackup(id: string, scope: BackupScope): Promise<AppSnapshot>
+  refreshExternalInstallations(): Promise<AppSnapshot>
+  selectExternalInstallation(id: string): Promise<AppSnapshot>
+  uninstallExternalInstallation(id: string): Promise<AppSnapshot>
   getAppUpdate(): Promise<AppUpdateSnapshot>
   checkAppUpdate(): Promise<AppUpdateSnapshot>
   downloadAppUpdate(): Promise<AppUpdateSnapshot>

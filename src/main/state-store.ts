@@ -4,8 +4,9 @@ import writeFileAtomic from 'write-file-atomic'
 import { defaultRegistryUrl, registryUrlSchema, releaseChannelSchema, type LocalePreference, type ReleaseChannel } from '../shared/contracts'
 
 export interface PersistedState {
-  schemaVersion: 2
+  schemaVersion: 3
   selectedVersion: string | null
+  selectedExternalId: string | null
   dismissedLatest: string | null
   localePreference: LocalePreference
   releaseChannel: ReleaseChannel
@@ -13,8 +14,9 @@ export interface PersistedState {
 }
 
 const defaults: PersistedState = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   selectedVersion: null,
+  selectedExternalId: null,
   dismissedLatest: null,
   localePreference: 'system',
   releaseChannel: 'all',
@@ -32,8 +34,9 @@ export class StateStore {
     try {
       const parsed = JSON.parse(await readFile(this.file, 'utf8')) as Partial<PersistedState>
       return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         selectedVersion: typeof parsed.selectedVersion === 'string' ? parsed.selectedVersion : null,
+        selectedExternalId: typeof parsed.selectedExternalId === 'string' && /^[0-9a-f]{16}$/.test(parsed.selectedExternalId) ? parsed.selectedExternalId : null,
         dismissedLatest: typeof parsed.dismissedLatest === 'string' ? parsed.dismissedLatest : null,
         localePreference: ['system', 'zh-CN', 'en-US'].includes(parsed.localePreference ?? '') ? parsed.localePreference as LocalePreference : 'system',
         releaseChannel: releaseChannelSchema.safeParse(parsed.releaseChannel).success ? parsed.releaseChannel as ReleaseChannel : 'all',
