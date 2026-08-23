@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, OfficialVersion, ProxyMode, ReleaseChannel, RepairSessionSummary } from '../shared/contracts'
-import { defaultRegistryUrl, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, proxyModeSchema, proxyUrlSchema, registryUrlSchema, releaseChannelSchema, resolveLocale } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, OfficialVersion, ProxyMode, ReleaseChannel, RepairMode, RepairSessionSummary } from '../shared/contracts'
+import { defaultRegistryUrl, exactVersionSchema, externalInstallationIdSchema, localePreferenceSchema, proxyModeSchema, proxyUrlSchema, registryUrlSchema, releaseChannelSchema, repairModeSchema, resolveLocale } from '../shared/contracts'
 import { runProcess } from './process-utils'
 import { DshRegistry } from './registry'
 import type { RuntimePaths } from './runtime-paths'
@@ -17,8 +17,9 @@ import type { PluginRepairActions } from './repair/plugin-repair-actions'
 
 export class AppController extends EventEmitter {
   private state: PersistedState = {
-    schemaVersion: 5, selectedVersion: null, selectedExternalId: null, dismissedLatest: null, localePreference: 'system',
-    releaseChannel: 'all', registryUrl: defaultRegistryUrl, closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null
+    schemaVersion: 6, selectedVersion: null, selectedExternalId: null, dismissedLatest: null, localePreference: 'system',
+    releaseChannel: 'all', registryUrl: defaultRegistryUrl, closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null,
+    repairMode: 'auto'
   }
   private latestVersion: string | null = null
   private availableVersions: OfficialVersion[] = []
@@ -145,6 +146,17 @@ export class AppController extends EventEmitter {
   }
 
   async launch(): Promise<AppSnapshot> {
+    return await this.launchWithRepairMode(this.state.repairMode)
+  }
+
+  async confirmStartupRepair(): Promise<AppSnapshot> {
+    if (this.repairSession?.phase !== 'awaiting-confirmation' || !this.repairSession.diagnosis?.action) {
+      throw new Error('当前没有等待确认的启动修复')
+    }
+    return await this.launchWithRepairMode('auto')
+  }
+
+  private async launchWithRepairMode(mode: RepairMode): Promise<AppSnapshot> {
     if (!this.state.selectedVersion) throw new Error('请先安装并选择一个 DSH 版本')
     try {
       let resolved: ResolvedDsh
@@ -153,14 +165,14 @@ export class AppController extends EventEmitter {
       } catch (resolutionError) {
         if (!this.repairEngine || this.state.selectedExternalId) throw resolutionError
         const result = await this.repairEngine.repairManagedVersion(
-          this.state.selectedVersion, resolutionError, 'auto', this.state.registryUrl
+          this.state.selectedVersion, resolutionError, mode, this.state.registryUrl
         )
         this.repairSession = result.session
         this.error = null
         return await this.snapshot()
       }
       if (this.repairEngine) {
-        const result = await this.repairEngine.launch(resolved, 'auto')
+        const result = await this.repairEngine.launch(resolved, mode)
         this.repairSession = result.session
       } else {
         await this.supervisor.start(resolved)
@@ -267,6 +279,12 @@ export class AppController extends EventEmitter {
     return await this.emitSnapshot()
   }
 
+  async setRepairMode(mode: RepairMode): Promise<AppSnapshot> {
+    this.state.repairMode = repairModeSchema.parse(mode)
+    await this.store.write(this.state)
+    return await this.emitSnapshot()
+  }
+
   async keepQuarantinedPlugin(entryId: string): Promise<AppSnapshot> {
     if (!this.pluginRepairActions) throw new Error('插件修复操作不可用')
     try {
@@ -348,6 +366,7 @@ export class AppController extends EventEmitter {
       startAtLogin: this.state.startAtLogin,
       proxyMode: this.state.proxyMode,
       manualProxyUrl: this.state.manualProxyUrl,
+      repairMode: this.state.repairMode,
       nodeVersion: this.nodeVersion,
       latestVersion: this.latestVersion,
       selectedVersion: this.state.selectedVersion,

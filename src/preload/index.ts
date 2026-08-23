@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { channels } from '../shared/ipc-channels'
-import type { AppSnapshot, BackupScope, DesktopApi, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel } from '../shared/contracts'
+import type { AppSnapshot, BackupScope, DesktopApi, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel, RepairMode } from '../shared/contracts'
 
 const api: DesktopApi = {
   getSnapshot: () => ipcRenderer.invoke(channels.snapshot),
@@ -9,6 +9,7 @@ const api: DesktopApi = {
   uninstall: (version) => ipcRenderer.invoke(channels.uninstall, version),
   select: (version) => ipcRenderer.invoke(channels.select, version),
   launch: () => ipcRenderer.invoke(channels.launch),
+  confirmStartupRepair: () => ipcRenderer.invoke(channels.confirmStartupRepair),
   stop: () => ipcRenderer.invoke(channels.stop),
   dismissUpdate: (version) => ipcRenderer.invoke(channels.dismissUpdate, version),
   openExternal: (url) => ipcRenderer.invoke(channels.openExternal, url),
@@ -22,6 +23,10 @@ const api: DesktopApi = {
   uninstallExternalInstallation: (id: string) => ipcRenderer.invoke(channels.uninstallExternalInstallation, id),
   setDesktopPreferences: (closeToTray: boolean, startAtLogin: boolean) => ipcRenderer.invoke(channels.setDesktopPreferences, closeToTray, startAtLogin),
   setNetworkPreferences: (mode: ProxyMode, manualProxyUrl: string | null) => ipcRenderer.invoke(channels.setNetworkPreferences, mode, manualProxyUrl),
+  setRepairMode: (mode: RepairMode) => ipcRenderer.invoke(channels.setRepairMode, mode),
+  keepQuarantinedPlugin: (entryId: string) => ipcRenderer.invoke(channels.keepQuarantinedPlugin, entryId),
+  reenableQuarantinedPlugin: (entryId: string) => ipcRenderer.invoke(channels.reenableQuarantinedPlugin, entryId),
+  uninstallQuarantinedPlugin: (entryId: string, confirmed: true) => ipcRenderer.invoke(channels.uninstallQuarantinedPlugin, entryId, confirmed),
   openDiagnosticsDirectory: () => ipcRenderer.invoke(channels.openDiagnosticsDirectory),
   onStateChanged: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, snapshot: AppSnapshot): void => listener(snapshot)

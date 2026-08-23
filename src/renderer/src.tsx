@@ -12,7 +12,7 @@ const empty: AppSnapshot = {
   appVersion: '0.1.0', nodeVersion: null, latestVersion: null, selectedVersion: null,
   locale: initialLocale, localePreference: 'system', releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org',
   harnessHome: null, backups: [], externalInstallations: [], selectedExternalId: null,
-  closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null,
+  closeToTray: true, startAtLogin: false, proxyMode: 'system', manualProxyUrl: null, repairMode: 'auto',
   dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, repairSession: null, error: null
 }
 type VersionFilter = 'all' | 'installed' | 'available'

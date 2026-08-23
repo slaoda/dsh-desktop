@@ -105,7 +105,7 @@
 **验收：**
 - [x] 重新启用失败会恢复隔离，成功则移除隔离状态。
 - [x] 卸载只接受 Profile 的直接依赖包名，并复用精确 DSH 和私有 pnpm 环境。
-- [ ] 卸载始终由用户确认；不可证明来源时拒绝。
+- [x] 卸载始终由用户确认；不可证明来源时拒绝。
 
 **验证：** `npm test -- tests/plugin-repair-actions.test.ts`。
 **依赖：** 任务 6。
@@ -117,9 +117,9 @@
 **说明：** 将修复模式、确认修复和插件决策通过严格校验的 Electron IPC 暴露给 UI。
 
 **验收：**
-- [ ] 所有 channel、枚举、id 和决策参数由主进程 Zod 校验。
-- [ ] Renderer 不能传任意路径、命令或插件包名执行修复。
-- [ ] DesktopApi 类型与实现一致。
+- [x] 所有 channel、枚举、id 和决策参数由主进程 Zod 校验。
+- [x] Renderer 不能传任意路径、命令或插件包名执行修复。
+- [x] DesktopApi 类型与实现一致。
 
 **验证：** `npm test -- tests/controller.test.ts`、`npm run typecheck`。
 **依赖：** 任务 6、8。

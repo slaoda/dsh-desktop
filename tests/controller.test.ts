@@ -9,8 +9,8 @@ import { DshSupervisor } from '../src/main/dsh-supervisor'
 import { DshRegistry } from '../src/main/registry'
 import { StateStore } from '../src/main/state-store'
 import { VersionManager } from '../src/main/version-manager'
-import type { RepairSessionSummary } from '../src/shared/contracts'
-import type { StartupRepairEngine } from '../src/main/repair/repair-engine'
+import type { RepairMode, RepairSessionSummary } from '../src/shared/contracts'
+import { RepairLaunchError, type StartupRepairEngine } from '../src/main/repair/repair-engine'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 let directory = ''
@@ -137,5 +137,55 @@ describe('AppController', () => {
     expect(engine.repairs).toBe(1)
     expect(launched).toMatchObject({ runtimeStatus: 'running', repairSession: session })
     await controller.stop()
+  })
+
+  it('询问模式持久化，并只在等待确认后执行一次显式修复', async () => {
+    directory = await mkdtemp(path.join(os.tmpdir(), 'dsh-controller-repair-mode-'))
+    const runtime = {
+      node: process.execPath,
+      npmCli: path.join(root, 'tests/fixtures/fake-npm.mjs'),
+      pnpmCli: path.join(root, 'tests/fixtures/fake-pnpm.mjs'),
+      commandDir: path.dirname(process.execPath)
+    }
+    const versions = new VersionManager(directory, path.join(directory, 'bundled'), runtime)
+    await versions.install('1.0.0', ['1.0.0'], () => undefined)
+    const resolved = await versions.resolve('1.0.0')
+    const supervisor = new DshSupervisor(process.execPath)
+    const awaiting: RepairSessionSummary = {
+      id: '33333333-3333-4333-8333-333333333333', phase: 'awaiting-confirmation', outcome: 'awaiting-confirmation',
+      diagnosis: {
+        category: 'plugin-conflict', confidence: 'high', summary: '插件冲突', evidence: ['plugin:web:test'],
+        candidate: { entryId: 'plugin:web:test', packageName: '@scope/test' },
+        action: { kind: 'quarantine-plugin', entryId: 'plugin:web:test', packageName: '@scope/test', reversible: true, requiresConfirmation: false }
+      },
+      actions: [], repairAttempts: 0, retryAttempts: 0, quarantinedPlugin: null
+    }
+    const recovered: RepairSessionSummary = {
+      ...awaiting, phase: 'recovered', outcome: 'recovered', repairAttempts: 1, retryAttempts: 1
+    }
+    class ConfirmRepairEngine extends EventEmitter implements StartupRepairEngine {
+      modes: RepairMode[] = []
+      async recoverInterrupted(): Promise<boolean> { return false }
+      async launch(_dsh: typeof resolved, mode: RepairMode) {
+        this.modes.push(mode)
+        if (mode === 'ask') throw new RepairLaunchError('等待用户确认', awaiting)
+        return { url: 'http://127.0.0.1:23456', session: recovered }
+      }
+      async repairManagedVersion(): Promise<never> { throw new Error('not used') }
+    }
+    const engine = new ConfirmRepairEngine()
+    const store = new StateStore(directory)
+    const controller = new AppController(
+      '0.1.0', store, new DshRegistry(async () => new Response('{}') as never), versions, supervisor, runtime,
+      'zh-CN', undefined, null, null, null, engine
+    )
+    await controller.initialize()
+
+    expect(await controller.setRepairMode('ask')).toMatchObject({ repairMode: 'ask' })
+    await expect(controller.confirmStartupRepair()).rejects.toThrow('没有等待确认')
+    await expect(controller.launch()).rejects.toThrow('等待用户确认')
+    expect((await controller.confirmStartupRepair()).repairSession).toEqual(recovered)
+    expect(engine.modes).toEqual(['ask', 'auto'])
+    expect((await store.read()).repairMode).toBe('ask')
   })
 })

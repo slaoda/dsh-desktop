@@ -4,13 +4,16 @@ import {
   backupScopeSchema,
   channels,
   clipboardTextSchema,
+  destructiveConfirmationSchema,
   exactVersionSchema,
   externalInstallationIdSchema,
   localePreferenceSchema,
+  pluginEntryIdSchema,
   proxyModeSchema,
   proxyUrlSchema,
   registryUrlSchema,
-  releaseChannelSchema
+  releaseChannelSchema,
+  repairModeSchema
 } from '../shared/contracts'
 import type { AppController } from './controller'
 import type { DiagnosticLogger } from './diagnostic-logger'
@@ -50,6 +53,13 @@ export function registerIpc(
     const current = await controller.snapshot()
     const snapshot = current.runtimeStatus === 'running' && current.runtimeUrl ? current : await controller.launch()
     if (!snapshot.runtimeUrl) throw new Error('官方 DSH 未返回本地地址')
+    await openHarnessWindow(snapshot.runtimeUrl)
+    return snapshot
+  })
+  ipcMain.handle(channels.confirmStartupRepair, async (event) => {
+    assertManager(event)
+    const snapshot = await controller.confirmStartupRepair()
+    if (!snapshot.runtimeUrl) throw new Error('修复后 Harness 未返回本地地址')
     await openHarnessWindow(snapshot.runtimeUrl)
     return snapshot
   })
@@ -111,6 +121,23 @@ export function registerIpc(
     const mode = proxyModeSchema.parse(rawMode)
     const manualProxyUrl = mode === 'manual' ? proxyUrlSchema.parse(rawManualProxyUrl) : null
     return await controller.setNetworkPreferences(mode, manualProxyUrl)
+  })
+  ipcMain.handle(channels.setRepairMode, async (event, rawMode: unknown) => {
+    assertManager(event)
+    return await controller.setRepairMode(repairModeSchema.parse(rawMode))
+  })
+  ipcMain.handle(channels.keepQuarantinedPlugin, async (event, rawEntryId: unknown) => {
+    assertManager(event)
+    return await controller.keepQuarantinedPlugin(pluginEntryIdSchema.parse(rawEntryId))
+  })
+  ipcMain.handle(channels.reenableQuarantinedPlugin, async (event, rawEntryId: unknown) => {
+    assertManager(event)
+    return await controller.reenableQuarantinedPlugin(pluginEntryIdSchema.parse(rawEntryId))
+  })
+  ipcMain.handle(channels.uninstallQuarantinedPlugin, async (event, rawEntryId: unknown, rawConfirmed: unknown) => {
+    assertManager(event)
+    destructiveConfirmationSchema.parse(rawConfirmed)
+    return await controller.uninstallQuarantinedPlugin(pluginEntryIdSchema.parse(rawEntryId))
   })
   ipcMain.handle(channels.openDiagnosticsDirectory, async (event) => {
     assertManager(event)

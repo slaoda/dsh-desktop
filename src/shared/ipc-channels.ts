@@ -5,6 +5,7 @@ export const channels = {
   uninstall: 'dsh:uninstall',
   select: 'dsh:select',
   launch: 'dsh:launch',
+  confirmStartupRepair: 'dsh:confirm-startup-repair',
   stop: 'dsh:stop',
   dismissUpdate: 'dsh:dismiss-update',
   openExternal: 'dsh:open-external',
@@ -18,6 +19,10 @@ export const channels = {
   uninstallExternalInstallation: 'dsh:uninstall-external-installation',
   setDesktopPreferences: 'desktop:set-preferences',
   setNetworkPreferences: 'desktop:set-network-preferences',
+  setRepairMode: 'dsh:set-repair-mode',
+  keepQuarantinedPlugin: 'dsh:keep-quarantined-plugin',
+  reenableQuarantinedPlugin: 'dsh:reenable-quarantined-plugin',
+  uninstallQuarantinedPlugin: 'dsh:uninstall-quarantined-plugin',
   openDiagnosticsDirectory: 'desktop:open-diagnostics-directory',
   stateChanged: 'dsh:state-changed',
   installProgress: 'dsh:install-progress'

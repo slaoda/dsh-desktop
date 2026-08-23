@@ -23,6 +23,7 @@ export const backupScopeSchema = z.enum(['configuration', 'full'])
 export const backupIdSchema = z.string().regex(/^\d{8}T\d{9}Z-[0-9a-f]{8}$/)
 export const externalInstallationIdSchema = z.string().regex(/^[0-9a-f]{16}$/)
 export const repairModeSchema = z.enum(['auto', 'ask', 'diagnose'])
+export const destructiveConfirmationSchema = z.literal(true, { error: '卸载冲突插件前需要用户明确确认' })
 export const pluginEntryIdSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:@/-]*$/)
 export const pluginPackageNameSchema = z.string().min(1).max(214).regex(/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i)
 export const proxyModeSchema = z.enum(['system', 'manual'])
@@ -174,6 +175,7 @@ export interface AppSnapshot {
   startAtLogin: boolean
   proxyMode: ProxyMode
   manualProxyUrl: string | null
+  repairMode: RepairMode
   nodeVersion: string | null
   latestVersion: string | null
   selectedVersion: string | null
@@ -200,6 +202,7 @@ export interface DesktopApi {
   uninstall(version: string): Promise<AppSnapshot>
   select(version: string): Promise<AppSnapshot>
   launch(): Promise<AppSnapshot>
+  confirmStartupRepair(): Promise<AppSnapshot>
   stop(): Promise<AppSnapshot>
   dismissUpdate(version: string): Promise<AppSnapshot>
   openExternal(url: string): Promise<void>
@@ -213,6 +216,10 @@ export interface DesktopApi {
   uninstallExternalInstallation(id: string): Promise<AppSnapshot>
   setDesktopPreferences(closeToTray: boolean, startAtLogin: boolean): Promise<AppSnapshot>
   setNetworkPreferences(mode: ProxyMode, manualProxyUrl: string | null): Promise<AppSnapshot>
+  setRepairMode(mode: RepairMode): Promise<AppSnapshot>
+  keepQuarantinedPlugin(entryId: string): Promise<AppSnapshot>
+  reenableQuarantinedPlugin(entryId: string): Promise<AppSnapshot>
+  uninstallQuarantinedPlugin(entryId: string, confirmed: true): Promise<AppSnapshot>
   openDiagnosticsDirectory(): Promise<void>
   onStateChanged(listener: (snapshot: AppSnapshot) => void): () => void
   onInstallProgress(listener: (progress: InstallProgress) => void): () => void
