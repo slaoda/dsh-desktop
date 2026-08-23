@@ -76,6 +76,8 @@ export interface AppSnapshot {
   harnessHome: string | null
   backups: BackupSummary[]
   externalInstallations: ExternalInstallation[]
+  closeToTray: boolean
+  startAtLogin: boolean
   nodeVersion: string | null
   latestVersion: string | null
   selectedVersion: string | null
@@ -124,6 +126,7 @@ export interface DesktopApi {
   refreshExternalInstallations(): Promise<AppSnapshot>
   selectExternalInstallation(id: string): Promise<AppSnapshot>
   uninstallExternalInstallation(id: string): Promise<AppSnapshot>
+  setDesktopPreferences(closeToTray: boolean, startAtLogin: boolean): Promise<AppSnapshot>
   getAppUpdate(): Promise<AppUpdateSnapshot>
   checkAppUpdate(): Promise<AppUpdateSnapshot>
   downloadAppUpdate(): Promise<AppUpdateSnapshot>

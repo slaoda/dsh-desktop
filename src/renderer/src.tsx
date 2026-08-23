@@ -11,7 +11,7 @@ const empty: AppSnapshot = {
   appVersion: '0.1.0', nodeVersion: null, latestVersion: null, selectedVersion: null,
   locale: initialLocale, localePreference: 'system', releaseChannel: 'all', registryUrl: 'https://registry.npmjs.org',
   harnessHome: null, backups: [], externalInstallations: [], selectedExternalId: null,
-  dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
+  closeToTray: true, startAtLogin: false, dismissedLatest: null, installedVersions: [], availableVersions: [], runtimeStatus: 'idle', runtimeUrl: null, error: null
 }
 const emptyAppUpdate: AppUpdateSnapshot = {
   currentVersion: '0.1.0', availableVersion: null, delivery: 'manual', status: 'idle', percent: null, message: null
@@ -162,6 +162,10 @@ function App(): React.JSX.Element {
     await perform(`external-uninstall:${id}`, language.uninstallingVersion(version), () => window.dshDesktop.uninstallExternalInstallation(id))
   }
 
+  const setDesktopPreferences = async (closeToTray: boolean, startAtLogin: boolean): Promise<void> => {
+    await perform('desktop-preferences', language.savingDesktopPreferences, () => window.dshDesktop.setDesktopPreferences(closeToTray, startAtLogin))
+  }
+
   return <main className="app-shell">
     <header className="topbar">
       <div className="brand-mark" aria-hidden="true"><img src={deepSeekWhale} alt="" /></div>
@@ -309,6 +313,11 @@ function App(): React.JSX.Element {
           </article>)}</div>
           {snapshot.externalInstallations.length === 0 && <small>{language.noExistingInstallations}</small>}
         </section>
+        <section className="desktop-preferences" aria-label={language.desktopPreferences}>
+          <span className="side-heading">{language.desktopPreferences}</span>
+          <label><input type="checkbox" checked={snapshot.closeToTray} disabled={busyAction !== null} onChange={(event) => void setDesktopPreferences(event.target.checked, snapshot.startAtLogin)} />{language.closeToTray}</label>
+          <label><input type="checkbox" checked={snapshot.startAtLogin} disabled={busyAction !== null} onChange={(event) => void setDesktopPreferences(snapshot.closeToTray, event.target.checked)} />{language.startAtLogin}</label>
+        </section>
       </aside>
 
       <div className="version-content">
@@ -446,6 +455,7 @@ function copy(locale: AppLocale) {
     registryAddress: 'Registry address', save: 'Save', releaseChannel: 'Channel', stable: 'Stable', preview: 'Preview', allChannels: 'All', savingVersionPreferences: 'Saving version source settings…',
     backups: 'Backups', backupUnavailable: 'Backup unavailable', backupConfig: 'Back up config', backupAll: 'Back up all', configOnly: 'Config', configAndSessions: 'Config + sessions', restoreConfig: 'Restore config', restoreAll: 'Restore all', creatingBackup: 'Creating backup…', restoringBackup: 'Restoring backup…', confirmRestore: 'Stop Harness and restore this backup? A safety backup of the current data will be created first.', confirmUninstall: (version: string) => `Uninstall Harness ${version}?`,
     existingInstallations: 'Existing installations', rescan: 'Rescan this computer', scanningInstallations: 'Scanning for existing Harness installations…', readOnly: 'Read-only', inPlace: 'In-place', useInPlace: 'Use', noExistingInstallations: 'No verified existing installations found.',
+    desktopPreferences: 'Desktop', closeToTray: 'Close to tray', startAtLogin: 'Start at login', savingDesktopPreferences: 'Saving desktop preferences…',
     searchVersion: 'Search versions', showPrerelease: 'Show prereleases', refreshVersions: 'Refresh official versions', syncingVersions: 'Syncing official npm versions…',
     versionCount: (count: number) => `${count} version${count === 1 ? '' : 's'}`, latest: 'Latest', inUse: 'In use', switching: 'Switching…', switch: 'Switch', installing: 'Installing…', install: 'Install', uninstalling: 'Uninstalling…', uninstall: 'Uninstall',
     switchingTo: (version: string) => `Switching to ${version}…`, installingVersion: (version: string) => `Installing ${version}…`, uninstallingVersion: (version: string) => `Uninstalling ${version}…`,
@@ -468,6 +478,7 @@ function copy(locale: AppLocale) {
     registryAddress: '镜像地址', save: '保存', releaseChannel: '渠道', stable: '稳定版', preview: '预览版', allChannels: '全部', savingVersionPreferences: '正在保存版本源设置…',
     backups: '备份', backupUnavailable: '备份不可用', backupConfig: '备份配置', backupAll: '完整备份', configOnly: '仅配置', configAndSessions: '配置及会话', restoreConfig: '恢复配置', restoreAll: '全部恢复', creatingBackup: '正在创建备份…', restoringBackup: '正在恢复备份…', confirmRestore: '确定停止 Harness 并恢复这个备份吗？恢复前会先为当前数据创建安全备份。', confirmUninstall: (version: string) => `确定卸载 Harness ${version} 吗？`,
     existingInstallations: '本机既有安装', rescan: '重新扫描本机', scanningInstallations: '正在扫描本机 Harness 安装…', readOnly: '只读', inPlace: '原地管理', useInPlace: '使用', noExistingInstallations: '未发现已验证的既有安装。',
+    desktopPreferences: '桌面设置', closeToTray: '关闭到托盘', startAtLogin: '开机启动', savingDesktopPreferences: '正在保存桌面设置…',
     searchVersion: '搜索版本号', showPrerelease: '显示预发布版本', refreshVersions: '刷新官方版本', syncingVersions: '正在同步 npm 官方版本…',
     versionCount: (count: number) => `${count} 个版本`, latest: '最新', inUse: '使用中', switching: '切换中…', switch: '切换', installing: '安装中…', install: '安装', uninstalling: '卸载中…', uninstall: '卸载',
     switchingTo: (version: string) => `正在切换到 ${version}…`, installingVersion: (version: string) => `正在安装 ${version}…`, uninstallingVersion: (version: string) => `正在卸载 ${version}…`,

@@ -16,6 +16,7 @@ export const channels = {
   refreshExternalInstallations: 'dsh:refresh-external-installations',
   selectExternalInstallation: 'dsh:select-external-installation',
   uninstallExternalInstallation: 'dsh:uninstall-external-installation',
+  setDesktopPreferences: 'desktop:set-preferences',
   stateChanged: 'dsh:state-changed',
   installProgress: 'dsh:install-progress',
   appUpdateSnapshot: 'desktop-update:snapshot',

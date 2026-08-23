@@ -20,6 +20,7 @@ const api: DesktopApi = {
   refreshExternalInstallations: () => ipcRenderer.invoke(channels.refreshExternalInstallations),
   selectExternalInstallation: (id: string) => ipcRenderer.invoke(channels.selectExternalInstallation, id),
   uninstallExternalInstallation: (id: string) => ipcRenderer.invoke(channels.uninstallExternalInstallation, id),
+  setDesktopPreferences: (closeToTray: boolean, startAtLogin: boolean) => ipcRenderer.invoke(channels.setDesktopPreferences, closeToTray, startAtLogin),
   getAppUpdate: () => ipcRenderer.invoke(channels.appUpdateSnapshot),
   checkAppUpdate: () => ipcRenderer.invoke(channels.appUpdateCheck),
   downloadAppUpdate: () => ipcRenderer.invoke(channels.appUpdateDownload),

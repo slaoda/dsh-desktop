@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, net, Notification, session, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, net, Notification, session, shell, Tray } from 'electron'
 import electronUpdater from 'electron-updater'
 import os from 'node:os'
 import path from 'node:path'
@@ -37,6 +37,10 @@ let dismissedDshPopoverVersion: string | null = null
 let dshPopoverSignature: string | null = null
 let activeLocale: AppLocale = 'zh-CN'
 let activeLocalePreference: LocalePreference = 'system'
+let tray: Tray | null = null
+let closeToTrayEnabled = true
+let startAtLoginEnabled = false
+let loginItemInitialized = false
 
 app.setName(APP_NAME)
 if (process.platform === 'darwin') process.title = APP_NAME
@@ -207,6 +211,11 @@ function createManagerWindow(): BrowserWindow {
     if (isSafeExternalUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
+  window.on('close', (event) => {
+    if (isQuitting || !closeToTrayEnabled) return
+    event.preventDefault()
+    window.hide()
+  })
   window.on('closed', () => { managerWindow = null })
   if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL)
   else void window.loadFile(path.join(__dirname, '../renderer/index.html'))
@@ -220,6 +229,49 @@ function showManagerWindow(): void {
     return
   }
   managerWindow = createManagerWindow()
+}
+
+function updateTrayMenu(snapshot: AppSnapshot | null = latestSnapshotForWindowTitle): void {
+  if (!tray) return
+  const copy = mainCopy(snapshot?.locale ?? activeLocale)
+  const running = snapshot?.runtimeStatus === 'running' || snapshot?.runtimeStatus === 'starting'
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: copy.openHarness, enabled: controller !== null, click: () => { void openPrimaryWindow() } },
+    { label: copy.openManager, enabled: controller !== null, click: showManagerWindow },
+    { type: 'separator' },
+    running
+      ? { label: copy.stopHarness, click: () => { void controller?.stop() } }
+      : { label: copy.startHarness, enabled: Boolean(snapshot?.selectedVersion), click: () => { void openPrimaryWindow() } },
+    { type: 'separator' },
+    { label: copy.quit, click: quitApplication }
+  ]))
+}
+
+function createTray(): void {
+  if (tray) return
+  const iconPath = app.isPackaged ? path.join(process.resourcesPath, 'ui', 'version-manager.png') : path.join(app.getAppPath(), 'build', 'menu-version-manager.png')
+  const icon = nativeImage.createFromPath(iconPath).resize({ width: 20, height: 20 })
+  tray = new Tray(icon)
+  tray.setToolTip(APP_NAME)
+  tray.on('double-click', () => { void openPrimaryWindow() })
+  updateTrayMenu()
+}
+
+function applyDesktopPreferences(snapshot: AppSnapshot): void {
+  closeToTrayEnabled = snapshot.closeToTray
+  if (!loginItemInitialized || startAtLoginEnabled !== snapshot.startAtLogin) {
+    loginItemInitialized = true
+    startAtLoginEnabled = snapshot.startAtLogin
+    if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: startAtLoginEnabled })
+  }
+}
+
+function quitApplication(): void {
+  if (isQuitting) return
+  isQuitting = true
+  const finish = (): void => app.quit()
+  if (controller?.isRuntimeActive()) void controller.stop().finally(finish)
+  else finish()
 }
 
 function installApplicationMenu(): void {
@@ -336,6 +388,7 @@ async function openDshWindow(rawUrl: string): Promise<void> {
     throw new Error('拒绝打开未经验证的 DSH 地址')
   }
   if (dshWindow && !dshWindow.isDestroyed()) {
+    dshWindow.show()
     dshWindow.focus()
     return
   }
@@ -386,6 +439,12 @@ async function openDshWindow(rawUrl: string): Promise<void> {
   window.on('minimize', hideDshUpdatePopover)
   window.on('restore', () => {
     if (latestSnapshotForWindowTitle) showDshUpdatePopover(latestSnapshotForWindowTitle)
+  })
+  window.on('close', (event) => {
+    if (isQuitting || !closeToTrayEnabled) return
+    event.preventDefault()
+    hideDshUpdatePopover()
+    window.hide()
   })
   window.on('closed', () => {
     if (dshUpdatePopover && !dshUpdatePopover.isDestroyed()) dshUpdatePopover.close()
@@ -496,6 +555,11 @@ function registerIpc(instance: AppController): void {
     assertManager(event)
     return await instance.uninstallExternalInstallation(externalInstallationIdSchema.parse(rawId))
   })
+  ipcMain.handle(channels.setDesktopPreferences, async (event, rawCloseToTray: unknown, rawStartAtLogin: unknown) => {
+    assertManager(event)
+    if (typeof rawCloseToTray !== 'boolean' || typeof rawStartAtLogin !== 'boolean') throw new Error('桌面偏好设置无效')
+    return await instance.setDesktopPreferences(rawCloseToTray, rawStartAtLogin)
+  })
   ipcMain.handle(channels.appUpdateSnapshot, (event) => {
     assertManager(event)
     return desktopUpdater?.snapshot()
@@ -556,6 +620,8 @@ app.whenReady().then(async () => {
   })
   controller.on('snapshot', (snapshot: AppSnapshot) => {
     latestSnapshotForWindowTitle = snapshot
+    applyDesktopPreferences(snapshot)
+    updateTrayMenu(snapshot)
     if (snapshot.locale !== activeLocale || snapshot.localePreference !== activeLocalePreference) {
       activeLocale = snapshot.locale
       activeLocalePreference = snapshot.localePreference
@@ -571,10 +637,12 @@ app.whenReady().then(async () => {
   controller.on('progress', (progress: InstallProgress) => sendToManager(channels.installProgress, progress))
   registerIpc(controller)
   const initialSnapshot = await controller.initialize()
+  applyDesktopPreferences(initialSnapshot)
   activeLocale = initialSnapshot.locale
   activeLocalePreference = initialSnapshot.localePreference
   installApplicationMenu()
   updateAboutPanel()
+  createTray()
   const refreshed = await controller.refresh()
   latestSnapshotForWindowTitle = refreshed
   notifyDshUpdate(refreshed)
@@ -593,12 +661,11 @@ app.on('before-quit', (event) => {
   if (isQuitting) return
   if (!controller?.isRuntimeActive()) return
   event.preventDefault()
-  isQuitting = true
-  void controller.stop().finally(() => app.quit())
+  quitApplication()
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (process.platform !== 'darwin' && !closeToTrayEnabled) app.quit()
 })
 
 function normalizeSystemLocale(locale: string): AppLocale {
@@ -622,7 +689,8 @@ function mainCopy(locale: AppLocale) {
     dshUpdateBody: (version: string) => `You are still using ${version}. Click to open Version Manager.`,
     dshWindowUpdateTag: (version: string) => `Update Available: v${version}`,
     openDshUpdateManager: (version: string) => `Update to v${version}`,
-    dshPopoverUpdateAction: 'Update'
+    dshPopoverUpdateAction: 'Update',
+    openHarness: 'Open Harness', openManager: 'Open Manager', startHarness: 'Start Harness', stopHarness: 'Stop Harness'
   }
   return {
     versionManager: '版本管理…', about: '关于 DSH Desktop', checkUpdates: '检查 DSH Desktop 更新…',
@@ -640,6 +708,7 @@ function mainCopy(locale: AppLocale) {
     dshUpdateBody: (version: string) => `当前继续使用 ${version}。点击打开版本管理。`,
     dshWindowUpdateTag: (version: string) => `发现更新: v${version}`,
     openDshUpdateManager: (version: string) => `更新到 v${version}`,
-    dshPopoverUpdateAction: '更新'
+    dshPopoverUpdateAction: '更新',
+    openHarness: '打开 Harness', openManager: '打开管理器', startHarness: '启动 Harness', stopHarness: '停止 Harness'
   }
 }

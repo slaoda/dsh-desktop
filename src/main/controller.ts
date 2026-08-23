@@ -15,8 +15,8 @@ import { ExternalInstallationManager } from './external-installations'
 
 export class AppController extends EventEmitter {
   private state: PersistedState = {
-    schemaVersion: 3, selectedVersion: null, selectedExternalId: null, dismissedLatest: null, localePreference: 'system',
-    releaseChannel: 'all', registryUrl: defaultRegistryUrl
+    schemaVersion: 4, selectedVersion: null, selectedExternalId: null, dismissedLatest: null, localePreference: 'system',
+    releaseChannel: 'all', registryUrl: defaultRegistryUrl, closeToTray: true, startAtLogin: false
   }
   private latestVersion: string | null = null
   private availableVersions: OfficialVersion[] = []
@@ -219,6 +219,14 @@ export class AppController extends EventEmitter {
     return await this.emitSnapshot()
   }
 
+  async setDesktopPreferences(closeToTray: boolean, startAtLogin: boolean): Promise<AppSnapshot> {
+    if (typeof closeToTray !== 'boolean' || typeof startAtLogin !== 'boolean') throw new Error('桌面偏好设置无效')
+    this.state.closeToTray = closeToTray
+    this.state.startAtLogin = startAtLogin
+    await this.store.write(this.state)
+    return await this.emitSnapshot()
+  }
+
   isRuntimeActive(): boolean {
     return !['idle', 'failed'].includes(this.supervisor.status)
   }
@@ -241,6 +249,8 @@ export class AppController extends EventEmitter {
       harnessHome: this.backups?.harnessHome ?? null,
       backups,
       externalInstallations,
+      closeToTray: this.state.closeToTray,
+      startAtLogin: this.state.startAtLogin,
       nodeVersion: this.nodeVersion,
       latestVersion: this.latestVersion,
       selectedVersion: this.state.selectedVersion,
