@@ -670,7 +670,10 @@ app.whenReady().then(async () => {
     showDshUpdatePopover(snapshot)
     sendToManager(channels.stateChanged, snapshot)
     updateMenuDshUpdateHint(snapshot)
-    if (['idle', 'failed'].includes(snapshot.runtimeStatus) && dshWindow && !dshWindow.isDestroyed()) dshWindow.close()
+    // A user close hides the still-running Harness in the tray. Once its
+    // runtime stops, destroy the page so a later launch cannot reveal a stale
+    // URL whose loopback server no longer exists.
+    if (['idle', 'failed'].includes(snapshot.runtimeStatus) && dshWindow && !dshWindow.isDestroyed()) dshWindow.destroy()
   })
   controller.on('progress', (progress: InstallProgress) => {
     void diagnosticLogger?.log(progress.phase === 'failed' ? 'error' : 'info', 'install-progress', progress as unknown as Record<string, unknown>)
@@ -701,9 +704,14 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', (event) => {
   if (isQuitting) return
-  if (!controller?.isRuntimeActive()) return
-  event.preventDefault()
-  quitApplication()
+  if (controller?.isRuntimeActive()) {
+    event.preventDefault()
+    quitApplication()
+    return
+  }
+  // Let application-menu, OS-session, and updater quits close tray-managed
+  // windows instead of being cancelled by their close-to-tray handlers.
+  isQuitting = true
 })
 
 app.on('window-all-closed', () => {

@@ -22,6 +22,7 @@ async function fixture(): Promise<{ home: string; userData: string }> {
     writeFile(path.join(home, '.credentials.yaml'), 'DEEPSEEK_API_KEY: sk-secret\n'),
     writeFile(path.join(home, '.env'), 'OPENAI_API_KEY=sk-secret\n'),
     writeFile(path.join(home, 'profiles', 'web', '.env'), 'TOKEN=secret\n'),
+    writeFile(path.join(home, 'profiles', 'web', '.env.local'), 'TOKEN=local-secret\n'),
     writeFile(path.join(home, 'skills', 'review', 'SKILL.md'), '# Review\n'),
     writeFile(path.join(home, 'sessions', '--project--', 'session-1', 'session.jsonl'), '{"type":"session"}\n')
   ])
@@ -43,6 +44,7 @@ describe('BackupManager', () => {
     await expect(readFile(path.join(data, '.credentials.yaml'), 'utf8')).rejects.toThrow()
     await expect(readFile(path.join(data, '.env'), 'utf8')).rejects.toThrow()
     await expect(readFile(path.join(data, 'profiles', 'web', '.env'), 'utf8')).rejects.toThrow()
+    await expect(readFile(path.join(data, 'profiles', 'web', '.env.local'), 'utf8')).rejects.toThrow()
   })
 
   it('默认只保留最近三个完整备份', async () => {
@@ -71,4 +73,3 @@ describe('BackupManager', () => {
     await expect(manager.restore(backup.id, 'configuration')).rejects.toThrow('完整性校验失败')
   })
 })
-

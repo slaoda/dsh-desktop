@@ -6,7 +6,8 @@ export type DiagnosticLevel = 'info' | 'warn' | 'error'
 export function redactDiagnostic(value: string): string {
   return value
     .replace(/([a-z][a-z0-9+.-]*:\/\/)[^@\s/]+@/gi, '$1[REDACTED]@')
-    .replace(/\b([A-Z0-9_]*(?:API_KEY|TOKEN|PASSWORD|SECRET)[A-Z0-9_]*)\s*[:=]\s*([^\s,;"']+)/gi, '$1=[REDACTED]')
+    .replace(/("(?:[^"\\]|\\.)*(?:api[_-]?key|token|password|secret|authorization)(?:[^"\\]|\\.)*"\s*:\s*)"(?:[^"\\]|\\.)*"/gi, '$1"[REDACTED]"')
+    .replace(/\b([A-Z0-9_-]*(?:API[_-]?KEY|TOKEN|PASSWORD|SECRET|AUTHORIZATION)[A-Z0-9_-]*)["']?\s*[:=]\s*(?:Bearer\s+)?([^\s,;"']+)/gi, '$1=[REDACTED]')
     .replace(/\bpassword\s*[:=]\s*([^\s,;"']+)/gi, 'password=[REDACTED]')
     .replace(/\bsk-[A-Za-z0-9_-]{6,}\b/g, '[REDACTED]')
 }
@@ -44,4 +45,3 @@ export class DiagnosticLogger {
     }
   }
 }
-

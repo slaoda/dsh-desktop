@@ -30,7 +30,7 @@ const excludedNames = new Set(['.credentials.yaml', '.credentials.yml', '.env', 
 
 function isSensitiveName(name: string): boolean {
   const lower = name.toLowerCase()
-  return excludedNames.has(lower) || lower.includes('credential') || /\.(?:key|pem|p12|pfx)$/i.test(lower)
+  return excludedNames.has(lower) || lower.startsWith('.env.') || lower === '.envrc' || lower.includes('credential') || /\.(?:key|pem|p12|pfx)$/i.test(lower)
 }
 
 function portablePath(relative: string): string {

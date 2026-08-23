@@ -101,6 +101,14 @@ const electronApp = await electron.launch({
   args: [`--user-data-dir=${path.join(isolatedHome, 'electron')}`],
   env: { ...launchEnvironment, ELECTRON_ENABLE_LOGGING: '1' }
 })
+async function waitForStartAtLogin(expected: boolean): Promise<void> {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    if (await electronApp.evaluate(({ app }) => app.getLoginItemSettings().openAtLogin) === expected) return
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error(expected ? '开机启动设置未写入 Windows' : '关闭开机启动后 Windows 设置仍然存在')
+}
 const applicationProcess = electronApp.process()
 let applicationOutput = ''
 const collectOutput = (chunk: Buffer | string): void => {
@@ -181,6 +189,18 @@ try {
   await manager.getByText(/DSH 运行中|DSH running/, { exact: true }).waitFor({ timeout: 10_000 })
   await manager.getByRole('button', { name: /停止|Stop/, exact: true }).click()
   await manager.getByText(/未运行|Not running/, { exact: true }).waitFor({ timeout: 10_000 })
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    if (BrowserWindow.getAllWindows().some((candidate) => candidate.getTitle().startsWith('DeepSeek Harness'))) {
+      throw new Error('停止 Harness 后陈旧运行窗口仍然存在')
+    }
+  })
+  if (process.platform === 'win32') {
+    const startAtLogin = manager.getByRole('checkbox', { name: /开机启动|Start at login/ })
+    await startAtLogin.check()
+    await waitForStartAtLogin(true)
+    await startAtLogin.uncheck()
+    await waitForStartAtLogin(false)
+  }
   const failingRow = manager.locator('article.version-row').filter({ has: manager.getByText(failingVersion, { exact: true }) })
   await failingRow.getByRole('button', { name: /切换|Switch/ }).click()
   const runtimeAlert = manager.getByRole('alert')
@@ -196,6 +216,7 @@ try {
   if (process.env.DSH_DESKTOP_E2E_SCREENSHOT) await manager.screenshot({ path: process.env.DSH_DESKTOP_E2E_SCREENSHOT, fullPage: true })
   console.log('Packaged E2E passed: selected dsh CLI, bundled pnpm, direct official DSH launch, version removal, manager UI, close-to-tray, runtime error details, clipboard copy, and explicit stop')
 } finally {
+  try { await electronApp.evaluate(({ app }) => app.setLoginItemSettings({ openAtLogin: false })) } catch { /* The app may already be closed. */ }
   await electronApp.close()
   await rm(isolatedHome, { recursive: true, force: true })
 }

@@ -10,6 +10,13 @@ const nodeVersion = '24.18.1'
 const dshVersion = '0.1.1-rc.2'
 const pnpmVersion = '11.22.0'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const pnpmBuildPolicy = `allowBuilds:
+  '@deepseek-ai/dsh-subprocess-local': true
+  '@google/genai': false
+  koffi: false
+  node-pty: false
+  protobufjs: false
+`
 
 function argument(name: string, fallback: string): string {
   return process.argv.find((value) => value.startsWith(`--${name}=`))?.split('=')[1] ?? fallback
@@ -97,6 +104,7 @@ async function main(): Promise<void> {
   }
 
   const installedPnpmRoot = path.join(root, 'node_modules', 'pnpm')
+  const installedPnpmCli = path.join(installedPnpmRoot, 'bin', 'pnpm.mjs')
   const installedPnpmManifest = JSON.parse(await readFile(path.join(installedPnpmRoot, 'package.json'), 'utf8')) as { name?: string; version?: string }
   if (installedPnpmManifest.name !== 'pnpm' || installedPnpmManifest.version !== pnpmVersion) {
     throw new Error(`需要 pnpm@${pnpmVersion}，请先运行 npm ci`)
@@ -127,12 +135,19 @@ async function main(): Promise<void> {
   await mkdir(dshRoot, { recursive: true })
   await writeFile(path.join(dshRoot, 'package.json'), `${JSON.stringify({
     name: 'dsh-desktop-bundled-dsh', version: '0.0.0', private: true,
-    dependencies: { '@deepseek-ai/dsh': dshVersion }
+    dependencies: {
+      '@deepseek-ai/dsh': dshVersion,
+      // The official UI packages require React 18. pnpm's automatic peer
+      // resolution may otherwise hoist react-dom 19 beside React 18.
+      react: '18.3.1',
+      'react-dom': '18.3.1'
+    }
   })}\n`)
+  await writeFile(path.join(dshRoot, 'pnpm-workspace.yaml'), pnpmBuildPolicy)
   // The official package is exact. npm's --before filter currently rejects valid
   // prerelease dependency ranges such as ^0.1.1-rc.2, so the generated lockfile,
   // SBOM, package identity check, and release SHA256 own artifact traceability.
-  await run(node, [npmCli, 'install', '--prefix', dshRoot, '--no-audit', '--no-fund', '--prefer-offline', '--legacy-peer-deps', '--registry=https://registry.npmjs.org/'])
+  await run(node, [installedPnpmCli, 'install', '--dir', dshRoot, '--prod', '--prefer-offline', '--node-linker=hoisted', '--reporter=append-only', '--registry=https://registry.npmjs.org/'])
   const manifest = JSON.parse(await readFile(path.join(dshRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8')) as { name?: string; version?: string }
   if (manifest.name !== '@deepseek-ai/dsh' || manifest.version !== dshVersion) throw new Error('预装官方 DSH 校验失败')
   const pruned = await pruneBundledResources(dshRoot, platform as ReleasePlatform, arch as ReleaseArch)

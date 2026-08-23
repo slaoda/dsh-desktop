@@ -139,7 +139,10 @@ function App(): React.JSX.Element {
     const isLatestInstalled = snapshot.installedVersions.some((item) => item.version === latestVersion)
     const action = isLatestInstalled
       ? () => window.dshDesktop.select(latestVersion)
-      : () => window.dshDesktop.install(latestVersion)
+      : async () => {
+          await window.dshDesktop.install(latestVersion)
+          return await window.dshDesktop.select(latestVersion)
+        }
     await perform(quickUpdateKey, quickUpdateBusyLabel, action)
   }
 
@@ -460,7 +463,7 @@ function copy(locale: AppLocale) {
     readingState: 'Reading local state…', ready: 'Ready', completed: 'Completed', failed: 'Operation failed', appUpdateFailed: 'App update failed',
     versionManager: 'Version Manager', communityClient: 'DeepSeek Harness community desktop client', switchToEnglish: 'Switch to English', switchToChinese: '切换为中文', starOnGitHub: 'View on GitHub and star the project',
     currentDshVersion: 'Current DSH version', currentlyUsing: 'Currently using', dshNotInstalled: 'DSH is not installed', current: 'Current', bundled: 'Bundled', updateAvailable: 'Update available',
-    quickUpdateAction: (version: string) => `Update to v${version}`, quickSwitching: (version: string) => `Switching to v${version}…`, quickInstalling: (version: string) => `Installing v${version}…`, quickUpdateTooltip: (version: string) => `A new DeepSeek Harness ${version} is available. Click to install or switch.`, quickUpdateBusy: 'Checking DSH update',
+    quickUpdateAction: (version: string) => `Update to v${version}`, quickSwitching: (version: string) => `Switching to v${version}…`, quickInstalling: (version: string) => `Installing and switching to v${version}…`, quickUpdateTooltip: (version: string) => `A new DeepSeek Harness ${version} is available. Click to install and switch with backup and rollback protection.`, quickUpdateBusy: 'Checking DSH update',
     officialFeaturesUnchanged: 'Launched by DSH Desktop. Official features and data remain unchanged.', stop: 'Stop', openDsh: 'Open DSH', startDsh: 'Start DSH', stoppingDsh: 'Stopping DSH…', openingDsh: 'Opening DSH…', startingDsh: 'Starting DSH…',
     versionFilters: 'Version filters', versions: 'Versions', allVersions: 'All versions', installed: 'Installed', available: 'Available', installedVersions: 'Installed versions', availableVersions: 'Available versions',
     versionSource: 'Version source', officialNpm: 'Official npm registry', officialNpmShort: 'Official npm', onlyOfficialLine1: 'Installs and runs only', onlyOfficialLine2: 'official DSH packages',
@@ -485,7 +488,7 @@ function copy(locale: AppLocale) {
     readingState: '正在读取本机状态…', ready: '准备就绪', completed: '操作完成', failed: '操作失败', appUpdateFailed: '应用更新失败',
     versionManager: '版本管理', communityClient: 'DeepSeek Harness 社区桌面客户端', switchToEnglish: '切换为英文', switchToChinese: '切换为中文', starOnGitHub: '在 GitHub 查看并 Star 项目',
     currentDshVersion: '当前 DSH 版本', currentlyUsing: '当前使用', dshNotInstalled: '尚未安装 DSH', current: '当前', bundled: '随应用提供', updateAvailable: '可更新',
-    quickUpdateAction: (version: string) => `更新到 v${version}`, quickSwitching: (version: string) => `正在切换到 v${version}…`, quickInstalling: (version: string) => `正在安装 v${version}…`, quickUpdateTooltip: (version: string) => `发现 DeepSeek Harness ${version}，点击安装或切换。`, quickUpdateBusy: '正在检查 DSH 更新',
+    quickUpdateAction: (version: string) => `更新到 v${version}`, quickSwitching: (version: string) => `正在切换到 v${version}…`, quickInstalling: (version: string) => `正在安装并切换到 v${version}…`, quickUpdateTooltip: (version: string) => `发现 DeepSeek Harness ${version}，点击安装并切换，全程受备份和回滚保护。`, quickUpdateBusy: '正在检查 DSH 更新',
     officialFeaturesUnchanged: '由 DSH Desktop 启动，官方功能和数据保持原样。', stop: '停止', openDsh: '打开 DSH', startDsh: '启动 DSH', stoppingDsh: '正在停止 DSH…', openingDsh: '正在打开 DSH…', startingDsh: '正在启动 DSH…',
     versionFilters: '版本筛选', versions: '版本', allVersions: '全部版本', installed: '已安装', available: '可安装', installedVersions: '已安装版本', availableVersions: '可安装版本',
     versionSource: '版本来源', officialNpm: 'npm 官方源', officialNpmShort: '官方 npm', onlyOfficialLine1: '仅安装并运行', onlyOfficialLine2: '官方 DSH 包',

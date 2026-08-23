@@ -23,22 +23,33 @@ async function npmSbom(cwd: string, omitDev: boolean): Promise<string> {
   })
 }
 
-interface Lockfile {
-  packages?: Record<string, { name?: string; version?: string; license?: string }>
+interface CycloneDxLicense {
+  license?: { id?: string; name?: string }
+  expression?: string
 }
 
-async function licenses(lockPath: string, label: string): Promise<string[]> {
-  const lock = JSON.parse(await readFile(lockPath, 'utf8')) as Lockfile
-  return Object.entries(lock.packages ?? {})
-    .filter(([location, value]) => location.startsWith('node_modules/') && value.version)
-    .map(([location, value]) => `${label}\t${value.name ?? location.replace(/^node_modules\//, '')}\t${value.version}\t${value.license ?? 'SEE PACKAGE'}`)
+interface CycloneDxBom {
+  components?: Array<{ name?: string; group?: string; version?: string; licenses?: CycloneDxLicense[] }>
 }
 
-await writeFile(path.join(releaseDir, 'dsh-desktop-sbom.cdx.json'), await npmSbom(root, true))
-await writeFile(path.join(releaseDir, 'official-dsh-sbom.cdx.json'), await npmSbom(dshRoot, false))
+function licenses(sbom: string, label: string): string[] {
+  const bom = JSON.parse(sbom) as CycloneDxBom
+  return (bom.components ?? [])
+    .filter((component) => component.name && component.version)
+    .map((component) => {
+      const packageName = component.group ? `${component.group}/${component.name}` : component.name
+      const license = component.licenses?.map((entry) => entry.expression ?? entry.license?.id ?? entry.license?.name).filter(Boolean).join(' OR ') || 'SEE PACKAGE'
+      return `${label}\t${packageName}\t${component.version}\t${license}`
+    })
+}
+
+const desktopSbom = await npmSbom(root, true)
+const officialDshSbom = await npmSbom(dshRoot, false)
+await writeFile(path.join(releaseDir, 'dsh-desktop-sbom.cdx.json'), desktopSbom)
+await writeFile(path.join(releaseDir, 'official-dsh-sbom.cdx.json'), officialDshSbom)
 const licenseLines = [
-  ...(await licenses(path.join(root, 'package-lock.json'), 'DSH Desktop')),
-  ...(await licenses(path.join(dshRoot, 'package-lock.json'), 'Official DSH runtime')),
+  ...licenses(desktopSbom, 'DSH Desktop'),
+  ...licenses(officialDshSbom, 'Official DSH runtime'),
   'Bundled runtime\tNode.js\tv24.18.1\tMIT (full text included in runtime/LICENSE)'
 ].sort()
 await writeFile(path.join(releaseDir, 'THIRD-PARTY-LICENSES.txt'), `Component\tPackage\tVersion\tLicense\n${licenseLines.join('\n')}\n`)

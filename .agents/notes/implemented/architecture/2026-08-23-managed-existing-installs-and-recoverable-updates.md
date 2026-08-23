@@ -1,13 +1,13 @@
 # Decision: Manage eligible existing installs and recoverable updates
 
-Status: proposed
+Status: implemented
 Category: architecture
 
 ## Problem
 
 The original desktop boundary owns only application-managed Harness versions and deliberately does not read Harness user data. The Windows manager product requires in-place management of eligible existing installations and recoverable updates that back up configuration and sessions. Implementing either without an explicit ownership model could delete external files, expose credentials, or commit a broken version switch.
 
-## Proposal
+## Decision
 
 Add two narrow, opt-in capabilities:
 
@@ -16,14 +16,9 @@ Add two narrow, opt-in capabilities:
 
 Downloaded packages never provide migration code. Known migrations are manager-owned, allowlisted operations; unknown breaking changes require an explicit warning.
 
-## Acceptance criteria
+## Verification
 
-- Detection cannot make a project-local package destructively manageable.
-- External CLI resolution cannot escape the validated package root.
-- Credentials cannot enter backups, restores, diagnostics, or logs.
-- Failed candidate startup leaves the previous selection committed.
-- Stale journals are detected without deleting user data.
-- The main process revalidates every IPC path, URL, mode, and installation identifier.
+Focused tests cover external-install classification and CLI containment, credential and environment-file exclusion, diagnostic redaction, backup integrity, stale journals, and candidate rollback. `npm run verify` enforces IPC and source boundaries. `npm run test:official` launches the pinned package, and packaged E2E verifies exact-version removal, close-to-tray lifecycle, candidate-failure reporting, and rollback through the shipped Electron entry path.
 
 ## Alternatives considered
 
@@ -32,10 +27,9 @@ Downloaded packages never provide migration code. Known migrations are manager-o
 - Let each downloaded version run its own migration scripts. This crosses the trust boundary and permits unreviewed code to modify user data.
 - Back up the entire Harness home. This risks copying API keys and unrelated user files.
 
-## Risks
+## Consequences
 
-- Harness data layout may change, requiring conservative category allowlists and clear partial-backup reporting.
-- Global package-manager discovery differs across Windows environments.
-- Backup size and available disk space may vary significantly.
-- The root product-boundary instructions and audit gates must be revised only when the corresponding behavior and tests are implemented.
-
+- Harness data layout may change, so backups intentionally remain partial and category-allowlisted rather than claiming the whole home.
+- Global package-manager discovery differs across Windows environments; ambiguous PATH and project entries remain read-only.
+- Recoverable switches use additional disk space for up to three credential-safe backups and retained exact versions.
+- The manager gains narrowly scoped read/restore access to allowlisted user-owned data while external package directories remain outside its ownership.
