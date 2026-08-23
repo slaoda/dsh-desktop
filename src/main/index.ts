@@ -20,6 +20,7 @@ import { RepairBaselineStore } from './repair/repair-baseline'
 import { RepairEngine } from './repair/repair-engine'
 import { RepairTransactionStore } from './repair/repair-transaction'
 import { createOfficialPluginUninstaller, PluginRepairActions } from './repair/plugin-repair-actions'
+import { repairDiagnosticRecord } from './repair/repair-telemetry'
 import { mainCopy, normalizeSystemLocale } from './copy'
 import { registerIpc } from './ipc'
 import { DshUpdatePopover, hasDshUpdate } from './dsh-update-popover'
@@ -42,6 +43,7 @@ let startAtLoginEnabled = false
 let loginItemInitialized = false
 let diagnosticLogger: DiagnosticLogger | null = null
 let lastDiagnosticSignature = ''
+let lastRepairDiagnosticSignature = ''
 const dshUpdatePopover = new DshUpdatePopover(() => showManagerWindow())
 const chromeActions: DesktopChromeActions = {
   openHarness: () => { void openPrimaryWindow() },
@@ -322,6 +324,14 @@ app.whenReady().then(async () => {
         managedVersions: versions
       })
     : null
+  repairEngine?.on('session', (repairSession) => {
+    const snapshot = latestSnapshotForWindowTitle
+    const record = repairDiagnosticRecord(repairSession, snapshot?.selectedVersion ?? null, snapshot?.selectedExternalId !== null && snapshot?.selectedExternalId !== undefined)
+    const signature = `${record.event}:${JSON.stringify(record.data)}`
+    if (signature === lastRepairDiagnosticSignature) return
+    lastRepairDiagnosticSignature = signature
+    void logger.log(record.level, record.event, record.data)
+  })
   const pluginRepairActions = harnessHome
     ? new PluginRepairActions({
         quarantine,

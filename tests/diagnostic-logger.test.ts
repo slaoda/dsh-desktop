@@ -9,12 +9,13 @@ afterEach(async () => { if (directory) await rm(directory, { recursive: true, fo
 
 describe('DiagnosticLogger', () => {
   it('隐藏 API Key、令牌、密码和 URL 认证信息', () => {
-    const value = 'DEEPSEEK_API_KEY=sk-secret123 proxy=http://alice:p4ss@proxy.test TOKEN=abc123 password: hunter2'
+    const value = 'DEEPSEEK_API_KEY=sk-secret123 proxy=http://alice:p4ss@proxy.test TOKEN=abc123 password: hunter2 url=https://example.test/?access_token=query-secret'
     const redacted = redactDiagnostic(value)
     expect(redacted).not.toContain('sk-secret123')
     expect(redacted).not.toContain('p4ss')
     expect(redacted).not.toContain('abc123')
     expect(redacted).not.toContain('hunter2')
+    expect(redacted).not.toContain('query-secret')
     expect(redacted).toContain('[REDACTED]')
   })
 
