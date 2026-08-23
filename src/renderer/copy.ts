@@ -46,14 +46,18 @@ export function copy(locale: AppLocale) {
     existingInstallations: 'Existing installations', rescan: 'Rescan this computer', scanningInstallations: 'Scanning for existing Harness installations…', readOnly: 'Read-only', inPlace: 'In-place', useInPlace: 'Use', noExistingInstallations: 'No verified existing installations found.',
     desktopPreferences: 'Desktop', closeToTray: 'Close to tray', startAtLogin: 'Start at login', savingDesktopPreferences: 'Saving desktop preferences…',
     networkProxy: 'Network proxy', systemProxy: 'System / auto', manualProxy: 'Manual', manualProxyAddress: 'Manual proxy address', saveNetwork: 'Apply network', savingNetworkPreferences: 'Applying network proxy…',
-    openDiagnostics: 'Open diagnostic logs',
+    openDiagnostics: 'Open diagnostic logs', repairMode: 'Startup repair', repairModeAuto: 'Automatic', repairModeAsk: 'Ask first', repairModeDiagnose: 'Diagnose only', repairModeHelp: 'At most one safe repair and one retry per launch.', savingRepairMode: 'Saving startup repair mode…',
     searchVersion: 'Search versions', showPrerelease: 'Show prereleases', refreshVersions: 'Refresh official versions', syncingVersions: 'Syncing official npm versions…',
     versionCount: (count: number) => `${count} version${count === 1 ? '' : 's'}`, latest: 'Latest', inUse: 'In use', switching: 'Switching…', switch: 'Switch', installing: 'Installing…', install: 'Install', uninstalling: 'Uninstalling…', uninstall: 'Uninstall',
     switchingTo: (version: string) => `Switching to ${version}…`, installingVersion: (version: string) => `Installing ${version}…`, uninstallingVersion: (version: string) => `Uninstalling ${version}…`,
     noMatchingVersions: 'No matching versions', refreshEmpty: 'Refresh to load versions from the official npm registry.', adjustFilters: 'Try adjusting the filters or search.', unknown: 'Unknown', unknownPublishDate: 'Publish date unknown',
     notRunning: 'Not running', starting: 'Starting', dshRunning: 'DSH running', stopping: 'Stopping', runtimeError: 'Runtime error',
     dshStartupFailed: 'Official DSH failed to start', dshStartupFailedSummary: 'This version returned an error. Expand details to see the cause.', copyError: 'Copy error', errorCopied: 'Copied', errorCopyFailed: 'Copy failed', viewDetails: 'View details', hideDetails: 'Hide details',
-    officialErrorBoundary: 'These startup details came from official DSH. DSH Desktop did not modify your configuration or credentials.'
+    officialErrorBoundary: 'These startup details came from official DSH. DSH Desktop did not modify your configuration or credentials.',
+    startupRepair: 'Startup repair', noRepairNeeded: 'No repair was needed for this launch.', healthCheckPassed: 'Healthy', confidenceLabel: (value: string) => `${value} confidence`, copyRepairReport: 'Copy report', reportCopied: 'Report copied', reportCopyFailed: 'Copy failed',
+    repairConfirmationHelp: 'The launcher found one reversible repair. Your configuration is backed up before it runs.', repairNeedsManualHandling: 'This issue is diagnosis-only because it cannot be repaired safely by the launcher.', confirmRepair: 'Repair and retry', confirmingRepair: 'Applying repair and retrying…',
+    quarantinedPlugin: 'Quarantined plugin', pluginKeptDisabled: 'This plugin will remain disabled for launcher-managed starts.', choosePluginOutcome: 'Harness recovered. Choose what to do with this plugin.', keepDisabled: 'Keep disabled', keepingPluginDisabled: 'Keeping plugin disabled…', reenablePlugin: 'Re-enable', reenablingPlugin: 'Re-enabling plugin and checking Harness…', uninstallPlugin: 'Uninstall plugin', uninstallingPlugin: 'Uninstalling the conflict plugin…', confirmPluginUninstall: (name: string) => `Uninstall ${name}? A configuration backup will be created first.`,
+    repairDetails: 'Diagnosis and action details', repairId: 'Repair ID', repairAttempts: 'Repair rounds', retryAttempts: 'Startup retries'
   }
   return {
     readingState: '正在读取本机状态…', ready: '准备就绪', completed: '操作完成', failed: '操作失败',
@@ -68,13 +72,17 @@ export function copy(locale: AppLocale) {
     existingInstallations: '本机既有安装', rescan: '重新扫描本机', scanningInstallations: '正在扫描本机 Harness 安装…', readOnly: '只读', inPlace: '原地管理', useInPlace: '使用', noExistingInstallations: '未发现已验证的既有安装。',
     desktopPreferences: '桌面设置', closeToTray: '关闭到托盘', startAtLogin: '开机启动', savingDesktopPreferences: '正在保存桌面设置…',
     networkProxy: '网络代理', systemProxy: '系统/自动', manualProxy: '手动', manualProxyAddress: '手动代理地址', saveNetwork: '应用网络设置', savingNetworkPreferences: '正在应用网络代理…',
-    openDiagnostics: '打开诊断日志',
+    openDiagnostics: '打开诊断日志', repairMode: '启动修复', repairModeAuto: '自动修复', repairModeAsk: '修复前询问', repairModeDiagnose: '仅诊断', repairModeHelp: '每次启动最多执行一轮安全修复和一次重试。', savingRepairMode: '正在保存启动修复模式…',
     searchVersion: '搜索版本号', showPrerelease: '显示预发布版本', refreshVersions: '刷新官方版本', syncingVersions: '正在同步 npm 官方版本…',
     versionCount: (count: number) => `${count} 个版本`, latest: '最新', inUse: '使用中', switching: '切换中…', switch: '切换', installing: '安装中…', install: '安装', uninstalling: '卸载中…', uninstall: '卸载',
     switchingTo: (version: string) => `正在切换到 ${version}…`, installingVersion: (version: string) => `正在安装 ${version}…`, uninstallingVersion: (version: string) => `正在卸载 ${version}…`,
     noMatchingVersions: '没有符合条件的版本', refreshEmpty: '点击右上角刷新，从 npm 官方源获取版本。', adjustFilters: '试试调整筛选或搜索内容。', unknown: '未知', unknownPublishDate: '发布时间未知',
     notRunning: '未运行', starting: '启动中', dshRunning: 'DSH 运行中', stopping: '停止中', runtimeError: '运行异常',
     dshStartupFailed: '官方 DSH 启动失败', dshStartupFailedSummary: '当前版本返回了错误，展开详情可查看具体原因。', copyError: '复制错误', errorCopied: '已复制', errorCopyFailed: '复制失败', viewDetails: '查看详情', hideDetails: '收起详情',
-    officialErrorBoundary: '以上为官方 DSH 的启动失败详情，DSH Desktop 未修改你的配置或凭据。'
+    officialErrorBoundary: '以上为官方 DSH 的启动失败详情，DSH Desktop 未修改你的配置或凭据。',
+    startupRepair: '启动修复', noRepairNeeded: '本次启动无需修复。', healthCheckPassed: '检查通过', confidenceLabel: (value: string) => `${value === 'high' ? '高' : value === 'medium' ? '中' : '低'}置信度`, copyRepairReport: '复制报告', reportCopied: '报告已复制', reportCopyFailed: '复制失败',
+    repairConfirmationHelp: '启动器找到了一项可回滚修复，执行前会先备份配置。', repairNeedsManualHandling: '此问题无法由启动器安全修复，当前仅提供诊断。', confirmRepair: '修复并重试', confirmingRepair: '正在修复并重试…',
+    quarantinedPlugin: '已隔离插件', pluginKeptDisabled: '以后由启动器管理的启动将继续禁用此插件。', choosePluginOutcome: 'Harness 已恢复，请决定如何处理这个插件。', keepDisabled: '保持禁用', keepingPluginDisabled: '正在保持插件禁用…', reenablePlugin: '重新启用', reenablingPlugin: '正在重新启用插件并检查 Harness…', uninstallPlugin: '卸载插件', uninstallingPlugin: '正在卸载冲突插件…', confirmPluginUninstall: (name: string) => `确定卸载 ${name} 吗？卸载前会先创建配置备份。`,
+    repairDetails: '诊断与操作详情', repairId: '修复编号', repairAttempts: '修复轮数', retryAttempts: '启动重试'
   }
 }

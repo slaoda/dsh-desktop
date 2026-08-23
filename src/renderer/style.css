@@ -6,9 +6,9 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 720px; min-height: 100vh; background: radial-gradient(circle at 87% -20%, rgba(86,134,254,.14), transparent 35%), var(--ivory); }
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button { color: inherit; }
-button:focus-visible, input:focus-visible { outline: 3px solid rgba(65,118,230,.24); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid rgba(65,118,230,.24); outline-offset: 2px; }
 .app-shell { width: min(100%, 1040px); margin: 0 auto; padding: 30px 38px 18px; }
 .topbar { display: flex; align-items: center; gap: 13px; margin-bottom: 22px; }
 .brand-mark { display: grid; place-items: center; width: 44px; height: 44px; overflow: hidden; border: 1px solid #d3e2ff; border-radius: 13px; background: #edf3fe; box-shadow: 0 7px 18px rgba(65,118,230,.10); }
@@ -61,6 +61,51 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(65,118,230,.
 .runtime-error-details { margin-top: 10px; }
 .runtime-error-details pre { max-height: 124px; margin: 0; padding: 11px 12px; overflow: auto; border: 1px solid #dfe2e7; border-radius: 8px; color: #3f4247; background: rgba(247,248,250,.94); font: 9px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .runtime-error-details > p { margin: 8px 0 0; color: #776763; font-size: 9px; line-height: 1.45; }
+.repair-card { display: grid; grid-template-columns: 38px minmax(0,1fr); gap: 13px; margin-top: 12px; padding: 16px 18px; border: 1px solid #d7e2f7; border-radius: 14px; background: linear-gradient(110deg, rgba(246,249,255,.98), rgba(255,255,255,.94)); box-shadow: 0 8px 24px rgba(31,54,98,.045); }
+.repair-card-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: #315eaf; background: #e4edfd; }
+.repair-card-icon svg { width: 20px; height: 20px; }
+.repair-recovered { border-color: #bedfc9; background: linear-gradient(110deg, rgba(241,251,245,.98), rgba(255,255,255,.94)); }
+.repair-recovered .repair-card-icon { color: #237247; background: #dcf4e5; }
+.repair-failed { border-color: #edcbc6; background: linear-gradient(110deg, rgba(255,246,244,.98), rgba(255,255,255,.94)); }
+.repair-failed .repair-card-icon { color: #bd2e26; background: #f9e3df; }
+.repair-awaiting-confirmation { border-color: #e8d095; background: linear-gradient(110deg, rgba(255,250,236,.98), rgba(255,255,255,.94)); }
+.repair-awaiting-confirmation .repair-card-icon { color: #856019; background: #f8ebc8; }
+.repair-card-body { min-width: 0; }
+.repair-card-heading { display: flex; align-items: flex-start; gap: 14px; }
+.repair-card-heading > div:first-child { min-width: 0; }
+.repair-card-heading h2 { margin: 3px 0 0; color: #20252c; font-size: 14px; letter-spacing: -.015em; }
+.repair-card-heading p { margin: 4px 0 0; color: #606872; font-size: 10px; line-height: 1.45; }
+.repair-card-tools { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+.repair-confidence { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border: 1px solid #d7dfed; border-radius: 999px; color: #647083; background: rgba(255,255,255,.72); font-size: 8px; font-weight: 740; white-space: nowrap; }
+.confidence-high { color: #237247; border-color: #bedfc9; background: #eef9f2; }
+.confidence-medium { color: #856019; border-color: #e8d095; background: #fff9e9; }
+.repair-copy { min-height: 27px; padding: 0 9px; border: 1px solid #cad8f1; border-radius: 7px; color: #315eaf; background: rgba(255,255,255,.78); cursor: pointer; font-size: 9px; font-weight: 710; white-space: nowrap; }
+.repair-copy:hover { border-color: #94b4ed; background: #fff; }
+.repair-decision, .plugin-decision { display: flex; align-items: center; gap: 14px; margin-top: 13px; padding: 11px 12px; border: 1px solid #ead9aa; border-radius: 9px; background: rgba(255,252,243,.82); }
+.repair-decision p { margin: 0; color: #655d4d; font-size: 10px; line-height: 1.5; }
+.repair-confirm { flex: 0 0 auto; min-height: 32px; margin-left: auto; padding: 0 12px; }
+.plugin-decision { border-color: #cbdcf9; background: rgba(241,246,255,.78); }
+.plugin-decision > div:first-child { min-width: 0; }
+.plugin-decision strong, .plugin-decision span, .plugin-decision small { display: block; }
+.plugin-decision strong { color: #2e3743; font-size: 10px; }
+.plugin-decision span { margin-top: 3px; overflow: hidden; color: #315eaf; font: 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.plugin-decision small { margin-top: 4px; color: #687384; font-size: 9px; line-height: 1.45; }
+.plugin-decision-actions { display: flex; flex: 0 0 auto; gap: 6px; margin-left: auto; }
+.plugin-decision-actions .button { min-height: 30px; padding: 0 9px; font-size: 9px; }
+.repair-danger { color: #a23a3a; border-color: #e4baba; background: #fff7f7; }
+.repair-danger:hover:not(:disabled) { border-color: #d98f8f; background: #ffeded; }
+.repair-details { margin-top: 11px; border-top: 1px solid rgba(194,207,229,.7); padding-top: 9px; }
+.repair-details summary { width: fit-content; color: #53657f; cursor: pointer; font-size: 9px; font-weight: 690; }
+.repair-details dl { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; }
+.repair-details dl div { display: flex; gap: 5px; min-width: 0; }
+.repair-details dt { color: #7a8390; font-size: 8px; }
+.repair-details dd { margin: 0; color: #454e59; font: 8px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.repair-diagnosis-detail { margin-top: 9px; padding: 9px 10px; border-radius: 7px; color: #4e5660; background: rgba(244,246,249,.82); font-size: 9px; line-height: 1.5; }
+.repair-diagnosis-detail strong { display: block; color: #343b44; }
+.repair-diagnosis-detail ul { margin: 5px 0 0; padding-left: 18px; }
+.repair-action-list { display: grid; gap: 5px; margin: 8px 0 0; padding: 0; list-style: none; }
+.repair-action-list li { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 7px; color: #59616b; font-size: 9px; }
+.repair-action-list b { color: #315eaf; }
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 14px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; font-size: 11px; font-weight: 720; transition: transform .15s ease, background .15s ease, border-color .15s ease; }
 .button svg { width: 15px; height: 15px; }
 .button:hover:not(:disabled) { transform: translateY(-1px); }
@@ -128,6 +173,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(65,118,230,.
 .desktop-preferences .network-save { justify-self: end; border: 0; border-radius: 6px; background: var(--forest-2); padding: 6px 9px; color: #fff; font-size: 9px; cursor: pointer; }
 .desktop-preferences .network-save:disabled { opacity: .45; cursor: default; }
 .desktop-preferences .diagnostics-button { border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 6px 9px; color: var(--ink); font-size: 9px; cursor: pointer; }
+.desktop-preferences .repair-mode-help { margin-top: -3px; color: #7b8189; font-size: 8px; line-height: 1.4; }
 .search { display: flex; align-items: center; flex: 1; min-width: 160px; height: 36px; padding: 0 11px; border: 1px solid #d9ddd6; border-radius: 9px; color: #929891; background: rgba(255,255,255,.72); }
 .search:focus-within { border-color: #8db3ff; box-shadow: 0 0 0 3px rgba(65,118,230,.08); }
 .search svg { flex: 0 0 auto; width: 15px; height: 15px; }
@@ -178,6 +224,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(65,118,230,.
   .current-card { padding: 21px; } .current-orbit { display: none; }
   .toggle-label { font-size: 0; } .current-title h2 { font-size: 22px; }
   .runtime-error-heading { align-items: flex-start; } .runtime-error-actions { flex-direction: column; align-items: stretch; }
+  .repair-card-heading, .plugin-decision, .repair-decision { align-items: flex-start; }
+  .repair-card-tools, .plugin-decision-actions { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

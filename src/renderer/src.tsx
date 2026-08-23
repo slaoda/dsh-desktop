@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import semver from 'semver'
-import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel } from '../shared/contracts'
+import type { AppLocale, AppSnapshot, BackupScope, InstallProgress, LocalePreference, ProxyMode, ReleaseChannel, RepairMode } from '../shared/contracts'
 import deepSeekWhale from './deepseek-whale.svg'
 import { copy, localizeMessage } from './copy'
 import { dshRuntimeFailureDetail, isDshRuntimeFailure } from './runtime-error'
+import { formatRepairReport } from './repair-report'
 import './style.css'
 
 const initialLocale: AppLocale = navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US'
@@ -28,6 +29,7 @@ function App(): React.JSX.Element {
   const [message, setMessage] = useState(copy(initialLocale).readingState)
   const [errorDetailsExpanded, setErrorDetailsExpanded] = useState(false)
   const [errorCopyState, setErrorCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [repairCopyState, setRepairCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [registryDraft, setRegistryDraft] = useState(empty.registryUrl)
   const [proxyModeDraft, setProxyModeDraft] = useState<ProxyMode>(empty.proxyMode)
   const [proxyUrlDraft, setProxyUrlDraft] = useState('')
@@ -47,6 +49,8 @@ function App(): React.JSX.Element {
     setErrorDetailsExpanded(false)
     setErrorCopyState('idle')
   }, [snapshot.error])
+
+  useEffect(() => { setRepairCopyState('idle') }, [snapshot.repairSession?.id])
 
   const rows = useMemo<VersionRow[]>(() => {
     const items = new Map<string, VersionRow>()
@@ -95,6 +99,9 @@ function App(): React.JSX.Element {
   const runtimeFailure = isDshRuntimeFailure(snapshot.runtimeStatus, snapshot.error) ? snapshot.error : null
   const runtimeFailureDetail = runtimeFailure ? dshRuntimeFailureDetail(runtimeFailure) : ''
   const localizedRuntimeFailure = runtimeFailure ? localizeMessage(snapshot.locale, runtimeFailure) : ''
+  const repairSession = snapshot.repairSession
+  const repairAction = repairSession?.diagnosis?.action ?? null
+  const canConfirmRepair = repairSession?.phase === 'awaiting-confirmation' && (repairAction?.kind === 'quarantine-plugin' || repairAction?.kind === 'reinstall-managed-version')
 
   const copyRuntimeError = async (): Promise<void> => {
     if (!runtimeFailure) return
@@ -103,6 +110,15 @@ function App(): React.JSX.Element {
       setErrorCopyState('copied')
     } catch {
       setErrorCopyState('failed')
+    }
+  }
+
+  const copyRepairReport = async (): Promise<void> => {
+    try {
+      await window.dshDesktop.copyText(formatRepairReport(snapshot))
+      setRepairCopyState('copied')
+    } catch {
+      setRepairCopyState('failed')
     }
   }
 
@@ -158,6 +174,23 @@ function App(): React.JSX.Element {
 
   const saveNetworkPreferences = async (): Promise<void> => {
     await perform('network-preferences', language.savingNetworkPreferences, () => window.dshDesktop.setNetworkPreferences(proxyModeDraft, proxyModeDraft === 'manual' ? proxyUrlDraft : null))
+  }
+
+  const changeRepairMode = async (mode: RepairMode): Promise<void> => {
+    await perform('repair-mode', language.savingRepairMode, () => window.dshDesktop.setRepairMode(mode))
+  }
+
+  const keepPluginDisabled = async (entryId: string): Promise<void> => {
+    await perform(`repair-keep:${entryId}`, language.keepingPluginDisabled, () => window.dshDesktop.keepQuarantinedPlugin(entryId))
+  }
+
+  const reenablePlugin = async (entryId: string): Promise<void> => {
+    await perform(`repair-reenable:${entryId}`, language.reenablingPlugin, () => window.dshDesktop.reenableQuarantinedPlugin(entryId))
+  }
+
+  const uninstallPlugin = async (entryId: string, packageName: string | null): Promise<void> => {
+    if (!window.confirm(language.confirmPluginUninstall(packageName ?? entryId))) return
+    await perform(`repair-uninstall:${entryId}`, language.uninstallingPlugin, () => window.dshDesktop.uninstallQuarantinedPlugin(entryId, true))
   }
 
   return <main className="app-shell">
@@ -248,6 +281,59 @@ function App(): React.JSX.Element {
       </section>}
     </section>
 
+    {repairSession && <section className={`repair-card repair-${repairSession.outcome ?? repairSession.phase}`} aria-labelledby="repair-card-title" aria-live="polite">
+      <div className="repair-card-icon" aria-hidden="true"><ShieldIcon /></div>
+      <div className="repair-card-body">
+        <div className="repair-card-heading">
+          <div>
+            <span className="overline">{language.startupRepair}</span>
+            <h2 id="repair-card-title">{repairPhaseText(repairSession.phase, snapshot.locale)}</h2>
+            <p>{repairSession.diagnosis ? repairCategoryText(repairSession.diagnosis.category, snapshot.locale) : language.noRepairNeeded}</p>
+          </div>
+          <div className="repair-card-tools">
+            <span className={`repair-confidence confidence-${repairSession.diagnosis?.confidence ?? 'none'}`}>
+              {repairSession.diagnosis ? language.confidenceLabel(repairSession.diagnosis.confidence) : language.healthCheckPassed}
+            </span>
+            <button type="button" className="repair-copy" onClick={() => void copyRepairReport()}>
+              {repairCopyState === 'copied' ? language.reportCopied : repairCopyState === 'failed' ? language.reportCopyFailed : language.copyRepairReport}
+            </button>
+          </div>
+        </div>
+
+        {repairSession.phase === 'awaiting-confirmation' && <div className="repair-decision">
+          <p>{canConfirmRepair ? language.repairConfirmationHelp : language.repairNeedsManualHandling}</p>
+          {canConfirmRepair && <button type="button" className="button primary repair-confirm" disabled={busyAction !== null} onClick={() => void perform('repair-confirm', language.confirmingRepair, window.dshDesktop.confirmStartupRepair)}>{language.confirmRepair}</button>}
+        </div>}
+
+        {repairSession.quarantinedPlugin && <div className="plugin-decision">
+          <div>
+            <strong>{language.quarantinedPlugin}</strong>
+            <span>{repairSession.quarantinedPlugin.packageName ?? repairSession.quarantinedPlugin.entryId}</span>
+            <small>{repairSession.quarantinedPlugin.disposition === 'kept' ? language.pluginKeptDisabled : language.choosePluginOutcome}</small>
+          </div>
+          <div className="plugin-decision-actions">
+            {repairSession.quarantinedPlugin.disposition === 'pending' && <button type="button" className="button secondary" disabled={busyAction !== null} onClick={() => void keepPluginDisabled(repairSession.quarantinedPlugin!.entryId)}>{language.keepDisabled}</button>}
+            <button type="button" className="button secondary" disabled={busyAction !== null} onClick={() => void reenablePlugin(repairSession.quarantinedPlugin!.entryId)}>{language.reenablePlugin}</button>
+            <button type="button" className="button repair-danger" disabled={busyAction !== null || !repairSession.quarantinedPlugin.packageName} onClick={() => void uninstallPlugin(repairSession.quarantinedPlugin!.entryId, repairSession.quarantinedPlugin!.packageName)}>{language.uninstallPlugin}</button>
+          </div>
+        </div>}
+
+        <details className="repair-details">
+          <summary>{language.repairDetails}</summary>
+          <dl>
+            <div><dt>{language.repairId}</dt><dd>{repairSession.id}</dd></div>
+            <div><dt>{language.repairAttempts}</dt><dd>{repairSession.repairAttempts} / 1</dd></div>
+            <div><dt>{language.retryAttempts}</dt><dd>{repairSession.retryAttempts} / 1</dd></div>
+          </dl>
+          {repairSession.diagnosis && <div className="repair-diagnosis-detail">
+            <strong>{repairSession.diagnosis.summary}</strong>
+            {repairSession.diagnosis.evidence.length > 0 && <ul>{repairSession.diagnosis.evidence.map((item, index) => <li key={`${index}:${item}`}>{item}</li>)}</ul>}
+          </div>}
+          {repairSession.actions.length > 0 && <ol className="repair-action-list">{repairSession.actions.map((action, index) => <li key={`${index}:${action.kind}:${action.target}`}><b>{repairActionStatusText(action.status, snapshot.locale)}</b><span>{action.summary}</span></li>)}</ol>}
+        </details>
+      </div>
+    </section>}
+
     <section className="library">
       <aside className="sidebar" aria-label={language.versionFilters}>
         <div className="side-heading">{language.versions}</div>
@@ -282,6 +368,8 @@ function App(): React.JSX.Element {
         </section>
         <section className="desktop-preferences" aria-label={language.desktopPreferences}>
           <span className="side-heading">{language.desktopPreferences}</span>
+          <label className="network-setting"><span>{language.repairMode}</span><select value={snapshot.repairMode} disabled={busyAction !== null} onChange={(event) => void changeRepairMode(event.target.value as RepairMode)}><option value="auto">{language.repairModeAuto}</option><option value="ask">{language.repairModeAsk}</option><option value="diagnose">{language.repairModeDiagnose}</option></select></label>
+          <small className="repair-mode-help">{language.repairModeHelp}</small>
           <label><input type="checkbox" checked={snapshot.closeToTray} disabled={busyAction !== null} onChange={(event) => void setDesktopPreferences(event.target.checked, snapshot.startAtLogin)} />{language.closeToTray}</label>
           <label><input type="checkbox" checked={snapshot.startAtLogin} disabled={busyAction !== null} onChange={(event) => void setDesktopPreferences(snapshot.closeToTray, event.target.checked)} />{language.startAtLogin}</label>
           <label className="network-setting"><span>{language.networkProxy}</span><select value={proxyModeDraft} disabled={busyAction !== null} onChange={(event) => setProxyModeDraft(event.target.value as ProxyMode)}><option value="system">{language.systemProxy}</option><option value="manual">{language.manualProxy}</option></select></label>
@@ -347,6 +435,24 @@ function formatDate(value: string | null, locale: AppLocale): string {
 function statusText(status: AppSnapshot['runtimeStatus'], locale: AppLocale): string {
   const language = copy(locale)
   return ({ idle: language.notRunning, starting: language.starting, running: language.dshRunning, stopping: language.stopping, failed: language.runtimeError })[status]
+}
+function repairPhaseText(phase: NonNullable<AppSnapshot['repairSession']>['phase'], locale: AppLocale): string {
+  const labels = locale === 'zh-CN'
+    ? { preflight: '正在检查启动条件', starting: '正在启动 Harness', diagnosing: '正在分析启动失败', 'awaiting-confirmation': '发现可修复问题，等待确认', repairing: '正在执行安全修复', retrying: '正在验证修复结果', recovered: '修复成功，Harness 已恢复', completed: '启动检查通过', failed: '未能自动恢复启动' }
+    : { preflight: 'Checking startup prerequisites', starting: 'Starting Harness', diagnosing: 'Diagnosing startup failure', 'awaiting-confirmation': 'A repair is available', repairing: 'Applying a safe repair', retrying: 'Verifying the repair', recovered: 'Repair succeeded and Harness recovered', completed: 'Startup check passed', failed: 'Startup could not be recovered automatically' }
+  return labels[phase]
+}
+function repairCategoryText(category: NonNullable<NonNullable<AppSnapshot['repairSession']>['diagnosis']>['category'], locale: AppLocale): string {
+  const labels = locale === 'zh-CN'
+    ? { 'plugin-conflict': '检测到插件冲突', 'plugin-missing': '检测到插件缺失', 'plugin-config': '检测到插件配置问题', 'managed-install-corrupt': '托管版本文件损坏或缺失', 'stale-process': '检测到残留进程或端口冲突', 'runtime-unhealthy': 'Harness 已启动但健康检查失败', 'sensitive-config': '问题涉及敏感配置，需要手动处理', 'external-installation': '既有安装仅提供诊断，不会被修改', unknown: '没有足够证据执行安全修复' }
+    : { 'plugin-conflict': 'A plugin conflict was detected', 'plugin-missing': 'A required plugin is missing', 'plugin-config': 'A plugin configuration issue was detected', 'managed-install-corrupt': 'Managed version files are damaged or missing', 'stale-process': 'A stale process or port conflict was detected', 'runtime-unhealthy': 'Harness started but failed its health check', 'sensitive-config': 'Sensitive configuration requires manual handling', 'external-installation': 'Existing installations are diagnosis-only and were not modified', unknown: 'There is not enough evidence for a safe repair' }
+  return labels[category]
+}
+function repairActionStatusText(status: NonNullable<AppSnapshot['repairSession']>['actions'][number]['status'], locale: AppLocale): string {
+  const labels = locale === 'zh-CN'
+    ? { applied: '已应用', 'rolled-back': '已回滚', failed: '失败' }
+    : { applied: 'Applied', 'rolled-back': 'Rolled back', failed: 'Failed' }
+  return labels[status]
 }
 function externalSourceLabel(source: AppSnapshot['externalInstallations'][number]['source'], locale: AppLocale): string {
   const labels = locale === 'zh-CN'

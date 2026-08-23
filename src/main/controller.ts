@@ -150,7 +150,8 @@ export class AppController extends EventEmitter {
   }
 
   async confirmStartupRepair(): Promise<AppSnapshot> {
-    if (this.repairSession?.phase !== 'awaiting-confirmation' || !this.repairSession.diagnosis?.action) {
+    const action = this.repairSession?.diagnosis?.action
+    if (this.repairSession?.phase !== 'awaiting-confirmation' || (action?.kind !== 'quarantine-plugin' && action?.kind !== 'reinstall-managed-version')) {
       throw new Error('当前没有等待确认的启动修复')
     }
     return await this.launchWithRepairMode('auto')
