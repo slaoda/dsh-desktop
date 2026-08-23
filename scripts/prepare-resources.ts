@@ -137,10 +137,11 @@ async function main(): Promise<void> {
     name: 'dsh-desktop-bundled-dsh', version: '0.0.0', private: true,
     dependencies: {
       '@deepseek-ai/dsh': dshVersion,
-      // The official UI packages require React 18. pnpm's automatic peer
-      // resolution may otherwise hoist react-dom 19 beside React 18.
+      // The official UI packages require a consistent React 18 dependency
+      // set. Hoisted automatic peers may otherwise mix React 18/19 packages.
       react: '18.3.1',
-      'react-dom': '18.3.1'
+      'react-dom': '18.3.1',
+      scheduler: '0.23.2'
     }
   })}\n`)
   await writeFile(path.join(dshRoot, 'pnpm-workspace.yaml'), pnpmBuildPolicy)
