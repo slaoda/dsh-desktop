@@ -188,4 +188,50 @@ describe('AppController', () => {
     expect(engine.modes).toEqual(['ask', 'auto'])
     expect((await store.read()).repairMode).toBe('ask')
   })
+
+  it('版本切换和回退都经过修复引擎，并保留候选版本的失败诊断', async () => {
+    directory = await mkdtemp(path.join(os.tmpdir(), 'dsh-controller-switch-repair-'))
+    const runtime = {
+      node: process.execPath,
+      npmCli: path.join(root, 'tests/fixtures/fake-npm.mjs'),
+      pnpmCli: path.join(root, 'tests/fixtures/fake-pnpm.mjs'),
+      commandDir: path.dirname(process.execPath)
+    }
+    const versions = new VersionManager(directory, path.join(directory, 'bundled'), runtime)
+    await versions.install('1.0.0', ['1.0.0'], () => undefined)
+    await versions.install('1.1.0', ['1.1.0'], () => undefined)
+    const supervisor = new DshSupervisor(process.execPath)
+    const failed: RepairSessionSummary = {
+      id: '44444444-4444-4444-8444-444444444444', phase: 'failed', outcome: 'failed',
+      diagnosis: { category: 'unknown', confidence: 'low', summary: '未知失败', evidence: [], candidate: null, action: null },
+      actions: [], repairAttempts: 0, retryAttempts: 0, quarantinedPlugin: null
+    }
+    const rollback: RepairSessionSummary = {
+      id: '55555555-5555-4555-8555-555555555555', phase: 'completed', outcome: 'not-needed', diagnosis: null,
+      actions: [], repairAttempts: 0, retryAttempts: 0, quarantinedPlugin: null
+    }
+    class SwitchRepairEngine extends EventEmitter implements StartupRepairEngine {
+      launches: string[] = []
+      async recoverInterrupted(): Promise<boolean> { return false }
+      async launch(dsh: { version: string }, _mode: RepairMode) {
+        this.launches.push(dsh.version)
+        if (dsh.version === '1.1.0') throw new RepairLaunchError('候选版本失败', failed)
+        return { url: 'http://127.0.0.1:34567', session: rollback }
+      }
+      async repairManagedVersion(): Promise<never> { throw new Error('not used') }
+    }
+    const engine = new SwitchRepairEngine()
+    const controller = new AppController(
+      '0.2.0', new StateStore(directory), new DshRegistry(async () => new Response('{}') as never), versions, supervisor, runtime,
+      'zh-CN', undefined, null, null, null, engine
+    )
+    await controller.initialize()
+    await controller.select('1.0.0')
+
+    const result = await controller.switchAndLaunch('1.1.0')
+
+    expect(engine.launches).toEqual(['1.1.0', '1.0.0'])
+    expect(result).toMatchObject({ selectedVersion: '1.0.0', repairSession: failed })
+    expect(result.error).toContain('已自动回退到 1.0.0')
+  })
 })

@@ -172,13 +172,7 @@ export class AppController extends EventEmitter {
         this.error = null
         return await this.snapshot()
       }
-      if (this.repairEngine) {
-        const result = await this.repairEngine.launch(resolved, mode)
-        this.repairSession = result.session
-      } else {
-        await this.supervisor.start(resolved)
-        this.repairSession = null
-      }
+      await this.startResolvedWithRepair(resolved, mode)
       this.error = null
     } catch (error) {
       if (error instanceof RepairLaunchError) this.repairSession = error.session
@@ -436,13 +430,14 @@ export class AppController extends EventEmitter {
     }
     await this.switchTransactions.begin(previousVersion, candidate.version, previousExternalId, candidateExternalId)
     try {
-      await this.supervisor.start(candidate)
+      await this.startResolvedWithRepair(candidate, this.state.repairMode)
       this.state.selectedVersion = candidate.version
       this.state.selectedExternalId = candidateExternalId
       await this.store.write(this.state)
       await this.switchTransactions.complete()
       this.error = null
     } catch (candidateError) {
+      const candidateRepairSession = candidateError instanceof RepairLaunchError ? candidateError.session : null
       this.state.selectedVersion = previousVersion
       this.state.selectedExternalId = previousExternalId
       await this.store.write(this.state)
@@ -450,7 +445,7 @@ export class AppController extends EventEmitter {
       const detail = candidateError instanceof Error ? candidateError.message : '候选版本启动失败'
       if (previousVersion) {
         try {
-          await this.supervisor.start(await this.resolveSelection(previousVersion, previousExternalId))
+          await this.startResolvedWithRepair(await this.resolveSelection(previousVersion, previousExternalId), this.state.repairMode)
           this.error = `新版本 ${candidate.version} 启动失败，已自动回退到 ${previousVersion}：${detail}`
         } catch (rollbackError) {
           const rollbackDetail = rollbackError instanceof Error ? rollbackError.message : '旧版本启动失败'
@@ -459,8 +454,24 @@ export class AppController extends EventEmitter {
       } else {
         this.error = `新版本 ${candidate.version} 启动失败：${detail}`
       }
+      if (candidateRepairSession) this.repairSession = candidateRepairSession
     }
     return await this.emitSnapshot()
+  }
+
+  private async startResolvedWithRepair(resolved: ResolvedDsh, mode: RepairMode): Promise<string> {
+    if (!this.repairEngine) {
+      this.repairSession = null
+      return await this.supervisor.start(resolved)
+    }
+    try {
+      const result = await this.repairEngine.launch(resolved, mode)
+      this.repairSession = result.session
+      return result.url
+    } catch (error) {
+      if (error instanceof RepairLaunchError) this.repairSession = error.session
+      throw error
+    }
   }
 
   private async emitSnapshot(): Promise<AppSnapshot> {
