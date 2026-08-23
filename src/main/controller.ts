@@ -423,7 +423,7 @@ export class AppController extends EventEmitter {
         await this.backups.create('update', 'full')
       } catch (backupError) {
         const detail = backupError instanceof Error ? backupError.message : '备份失败'
-        try { await this.supervisor.start(await this.resolveSelection(previousVersion, previousExternalId)) } catch { /* Snapshot reports the stopped/failed runtime. */ }
+        try { await this.startResolvedWithRepair(await this.resolveSelection(previousVersion, previousExternalId), this.state.repairMode) } catch { /* Snapshot reports the stopped/failed runtime. */ }
         this.error = `切换到 ${candidate.version} 前的安全备份失败，已取消切换：${detail}`
         return await this.emitSnapshot()
       }

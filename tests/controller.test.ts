@@ -234,4 +234,46 @@ describe('AppController', () => {
     expect(result).toMatchObject({ selectedVersion: '1.0.0', repairSession: failed })
     expect(result.error).toContain('已自动回退到 1.0.0')
   })
+
+  it('切换前备份失败时也通过修复引擎恢复当前版本', async () => {
+    directory = await mkdtemp(path.join(os.tmpdir(), 'dsh-controller-backup-restart-'))
+    const runtime = {
+      node: process.execPath,
+      npmCli: path.join(root, 'tests/fixtures/fake-npm.mjs'),
+      pnpmCli: path.join(root, 'tests/fixtures/fake-pnpm.mjs'),
+      commandDir: path.dirname(process.execPath)
+    }
+    const versions = new VersionManager(directory, path.join(directory, 'bundled'), runtime)
+    await versions.install('1.0.0', ['1.0.0'], () => undefined)
+    await versions.install('1.1.0', ['1.1.0'], () => undefined)
+    const session: RepairSessionSummary = {
+      id: '66666666-6666-4666-8666-666666666666', phase: 'completed', outcome: 'not-needed', diagnosis: null,
+      actions: [], repairAttempts: 0, retryAttempts: 0, quarantinedPlugin: null
+    }
+    class BackupRestartEngine extends EventEmitter implements StartupRepairEngine {
+      launches: string[] = []
+      async recoverInterrupted(): Promise<boolean> { return false }
+      async launch(dsh: { version: string }) { this.launches.push(dsh.version); return { url: 'http://127.0.0.1:45678', session } }
+      async repairManagedVersion(): Promise<never> { throw new Error('not used') }
+    }
+    const engine = new BackupRestartEngine()
+    const backups = {
+      harnessHome: path.join(directory, 'harness'),
+      hasSource: async () => true,
+      create: async () => { throw new Error('磁盘空间不足') },
+      list: async () => []
+    }
+    const controller = new AppController(
+      '0.2.0', new StateStore(directory), new DshRegistry(async () => new Response('{}') as never), versions,
+      new DshSupervisor(process.execPath), runtime, 'zh-CN', undefined, backups as never, null, null, engine
+    )
+    await controller.initialize()
+    await controller.select('1.0.0')
+
+    const result = await controller.switchAndLaunch('1.1.0')
+
+    expect(engine.launches).toEqual(['1.0.0'])
+    expect(result).toMatchObject({ selectedVersion: '1.0.0', repairSession: session })
+    expect(result.error).toContain('安全备份失败')
+  })
 })
