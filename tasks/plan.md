@@ -59,21 +59,21 @@
 - [x] 高置信度插件冲突可自动恢复。
 - [x] 未知、敏感和外部错误无写操作。
 - [x] 每轮最多一次修复和一次重试。
-- [ ] `npm run verify` 和 `npm run test:official` 通过。
+- [x] `npm run verify` 和 `npm run test:official` 通过。
 
 ## 阶段四：GUI、诊断与交付验证
 
 - [x] 任务 9：扩展 IPC/Preload，暴露经过校验的修复设置和决策动作。
-- [ ] 任务 10：实现修复状态、报告、模式设置和插件决策 UI。
+- [x] 任务 10：实现修复状态、报告、模式设置和插件决策 UI。
 - [x] 任务 11：补齐结构化诊断事件、安全回归和用户文档。
-- [ ] 任务 12：完成 Windows 打包 E2E、版本 v0.2.0 准备和最终审查。
+- [x] 任务 12：完成 Windows 打包 E2E、版本 v0.2.0 准备和最终审查。
 
 ### 检查点 D
 
-- [ ] 键盘可操作，错误、忙碌、成功和无修复状态清楚可见。
-- [ ] 复制报告和日志均通过敏感信息植入测试。
-- [ ] `npm run verify`、`npm run test:official`、`npm run package:win:x64`、`npm run test:packaged` 通过。
-- [ ] 代码审查无阻塞问题，准备交付但不自动发布或打标签。
+- [x] 键盘可操作，错误、忙碌、成功和无修复状态清楚可见。
+- [x] 复制报告和日志均通过敏感信息植入测试。
+- [x] `npm run verify`、`npm run test:official`、`npm run package:win:x64`、`npm run test:packaged` 通过。
+- [x] 代码审查无阻塞问题，准备交付但不自动发布或打标签。
 
 ## 风险与缓解
 
