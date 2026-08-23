@@ -1,9 +1,6 @@
 import { lstat, readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 
-export type ReleasePlatform = 'darwin' | 'win32'
-export type ReleaseArch = 'arm64' | 'x64'
-
 export interface PruneResult {
   removedBytes: number
   removedFiles: number
@@ -11,6 +8,7 @@ export interface PruneResult {
 }
 
 const knownNodePtyPrebuild = /^(darwin|win32)-(arm64|x64)$/
+const windowsPrebuild = 'win32-x64'
 
 async function measure(target: string): Promise<{ bytes: number; files: number }> {
   const info = await lstat(target)
@@ -50,23 +48,20 @@ async function removeDebugSymbols(target: string): Promise<{ bytes: number; file
  * The official DSH package and its executable source remain untouched.
  */
 export async function pruneBundledResources(
-  dshRoot: string,
-  platform: ReleasePlatform,
-  arch: ReleaseArch
+  dshRoot: string
 ): Promise<PruneResult> {
-  const desiredPrebuild = `${platform}-${arch}`
   const prebuildRoot = path.join(dshRoot, 'node_modules', 'node-pty', 'prebuilds')
   const prebuilds = await readdir(prebuildRoot, { withFileTypes: true })
 
-  if (!prebuilds.some((entry) => entry.isDirectory() && entry.name === desiredPrebuild)) {
-    throw new Error(`node-pty 缺少目标平台预编译文件: ${desiredPrebuild}`)
+  if (!prebuilds.some((entry) => entry.isDirectory() && entry.name === windowsPrebuild)) {
+    throw new Error('node-pty 缺少 Windows x64 预编译文件')
   }
 
   let removedBytes = 0
   let removedFiles = 0
   const removedPrebuilds: string[] = []
   for (const entry of prebuilds) {
-    if (!entry.isDirectory() || !knownNodePtyPrebuild.test(entry.name) || entry.name === desiredPrebuild) continue
+    if (!entry.isDirectory() || !knownNodePtyPrebuild.test(entry.name) || entry.name === windowsPrebuild) continue
     const target = path.join(prebuildRoot, entry.name)
     const measured = await measure(target)
     await rm(target, { recursive: true, force: true })

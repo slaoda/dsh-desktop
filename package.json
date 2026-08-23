@@ -40,9 +40,7 @@
     "verify:agents": "tsx scripts/verify-agent-infrastructure.ts",
     "verify": "npm run version:check && npm run verify:agents && npm run typecheck && npm test && npm run build && npm run audit:boundary",
     "prepare:runtime": "tsx scripts/prepare-resources.ts",
-    "package:mac:arm64": "npm run prepare:runtime -- --platform=darwin --arch=arm64 && npm run build && electron-builder --mac --arm64 --publish never --config.publish.channel=latest-arm64 && npm run release:metadata",
-    "package:mac:x64": "npm run prepare:runtime -- --platform=darwin --arch=x64 && npm run build && electron-builder --mac --x64 --publish never --config.publish.channel=latest-x64 && npm run release:metadata",
-    "package:win:x64": "npm run prepare:runtime -- --platform=win32 --arch=x64 && npm run build && electron-builder --win --x64 --publish never && npm run release:metadata"
+    "package:win:x64": "npm run prepare:runtime && npm run build && electron-builder --win --x64 --publish never && npm run release:metadata"
   },
   "dependencies": {
     "electron-updater": "6.8.9",
@@ -76,8 +74,6 @@
     "compression": "maximum",
     "electronDownload": {
       "checksums": {
-        "electron-v43.4.0-darwin-arm64.zip": "827f9f182566f46846377575b51c547b9926b111637313a373b6f717462aebac",
-        "electron-v43.4.0-darwin-x64.zip": "7ab39ec1b0bcf5463f2dc0040142fbc1c30cd7bc3f99086066f588c717b11e24",
         "electron-v43.4.0-win32-x64.zip": "ef0709cfa719739acce73de6f9b684304baf38c6454376638a70d34a7cecffe0"
       },
       "mirrorOptions": {
@@ -120,19 +116,6 @@
       "owner": "qufei1993",
       "repo": "dsh-desktop",
       "releaseType": "release"
-    },
-    "mac": {
-      "category": "public.app-category.developer-tools",
-      "icon": "build/icon.icns",
-      "identity": "-",
-      "sign": "./scripts/sign-macos.cjs",
-      "notarize": false,
-      "target": [
-        "dmg"
-      ],
-      "artifactName": "DSH-Desktop-${version}-${arch}.${ext}",
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false
     },
     "win": {
       "icon": "build/icon.ico",

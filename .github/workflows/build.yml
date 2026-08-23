@@ -40,20 +40,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: verify
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            command: package:mac:arm64
-            artifact: mac-arm64
-          - runner: macos-15-intel
-            command: package:mac:x64
-            artifact: mac-x64
-          - runner: windows-latest
-            command: package:win:x64
-            artifact: windows-x64
-    runs-on: ${{ matrix.runner }}
+    runs-on: windows-latest
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
@@ -66,24 +53,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test
-      - name: Package on macOS
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          ulimit -n "$(ulimit -Hn)"
-          echo "Open file limit: $(ulimit -n)"
-          npm run ${{ matrix.command }}
-      - name: Package on Windows
-        if: runner.os == 'Windows'
-        run: npm run ${{ matrix.command }}
+      - run: npm run package:win:x64
       - run: npm run test:packaged
       - name: Upload build artifacts (primary)
         id: upload-artifacts-v4
         uses: actions/upload-artifact@v7
         with:
-          name: dsh-desktop-${{ matrix.artifact }}
+          name: dsh-desktop-windows-x64
           path: |
-            release/*.dmg
             release/*.exe
             release/latest.yml
           if-no-files-found: error
@@ -92,9 +69,8 @@ jobs:
         id: upload-artifacts-v4-retry
         uses: actions/upload-artifact@v7
         with:
-          name: dsh-desktop-${{ matrix.artifact }}
+          name: dsh-desktop-windows-x64
           path: |
-            release/*.dmg
             release/*.exe
             release/latest.yml
           if-no-files-found: error
@@ -130,6 +106,5 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           overwrite_files: true
           files: |
-            release/*.dmg
             release/*.exe
             release/latest.yml

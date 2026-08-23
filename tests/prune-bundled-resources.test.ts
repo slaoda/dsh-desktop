@@ -23,29 +23,20 @@ afterEach(async () => {
 })
 
 describe('bundled release resource pruning', () => {
-  it('macOS arm64 仅保留目标原生文件且不删除未知的未来平台目录', async () => {
-    const root = await fixture()
-    const result = await pruneBundledResources(root, 'darwin', 'arm64')
-
-    expect(result.removedPrebuilds).toEqual(['darwin-x64', 'win32-arm64', 'win32-x64'])
-    expect(await readFile(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'darwin-arm64', 'pty.node'), 'utf8')).toBe('darwin-arm64')
-    expect(await readFile(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'future-platform', 'pty.node'), 'utf8')).toBe('future-platform')
-  })
-
   it('Windows x64 保留运行文件并删除 PDB 调试符号', async () => {
     const root = await fixture()
-    const result = await pruneBundledResources(root, 'win32', 'x64')
+    const result = await pruneBundledResources(root)
 
     expect(result.removedPrebuilds).toEqual(['darwin-arm64', 'darwin-x64', 'win32-arm64'])
     expect(await readFile(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'win32-x64', 'pty.node'), 'utf8')).toBe('win32-x64')
+    expect(await readFile(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'future-platform', 'pty.node'), 'utf8')).toBe('future-platform')
     expect(result.removedFiles).toBeGreaterThan(3)
     await expect(readFile(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'win32-x64', 'pty.pdb'))).rejects.toThrow()
   })
 
   it('目标原生文件缺失时阻止产生不可运行的安装包', async () => {
     const root = await fixture()
-    await expect(pruneBundledResources(root, 'darwin', 'x64')).resolves.toBeDefined()
-    await rm(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'darwin-x64'), { recursive: true })
-    await expect(pruneBundledResources(root, 'darwin', 'x64')).rejects.toThrow('node-pty 缺少目标平台预编译文件')
+    await rm(path.join(root, 'node_modules', 'node-pty', 'prebuilds', 'win32-x64'), { recursive: true })
+    await expect(pruneBundledResources(root)).rejects.toThrow('node-pty 缺少 Windows x64 预编译文件')
   })
 })

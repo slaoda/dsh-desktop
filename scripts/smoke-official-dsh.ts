@@ -6,10 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { parseLoopbackUrl, prependRuntimePath } from '../src/main/dsh-supervisor'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const platform = process.platform
-const arch = process.arch
 const runtime = path.join(root, 'build-resources', 'runtime')
-const node = platform === 'win32' ? path.join(runtime, 'node.exe') : path.join(runtime, 'bin', 'node')
+const node = path.join(runtime, 'node.exe')
 const runtimeBin = path.join(root, 'build-resources', 'runtime-bin')
 const packageRoot = path.join(root, 'build-resources', 'dsh', '0.1.1-rc.2', 'node_modules', '@deepseek-ai', 'dsh')
 const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8')) as { bin: string | Record<string, string> }
@@ -23,8 +21,8 @@ const runtimeEnvironment = {
 }
 
 async function verifyBundledPnpm(): Promise<void> {
-  const executable = platform === 'win32' ? 'cmd.exe' : 'pnpm'
-  const args = platform === 'win32' ? ['/d', '/s', '/c', 'pnpm --version'] : ['--version']
+  const executable = 'cmd.exe'
+  const args = ['/d', '/s', '/c', 'pnpm --version']
   const output = await new Promise<string>((resolve, reject) => {
     const command = spawn(executable, args, { env: runtimeEnvironment, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
@@ -38,8 +36,8 @@ async function verifyBundledPnpm(): Promise<void> {
 }
 
 async function verifySelectedDshCli(): Promise<void> {
-  const executable = platform === 'win32' ? 'cmd.exe' : 'dsh'
-  const args = platform === 'win32' ? ['/d', '/s', '/c', 'dsh --version'] : ['--version']
+  const executable = 'cmd.exe'
+  const args = ['/d', '/s', '/c', 'dsh --version']
   const output = await new Promise<string>((resolve, reject) => {
     const command = spawn(executable, args, { env: runtimeEnvironment, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''

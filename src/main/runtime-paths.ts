@@ -20,14 +20,12 @@ export function resolveRuntimePaths(resourcesPath: string, isPackaged: boolean):
   }
 
   const root = path.join(resourcesPath, 'runtime')
-  const node = process.platform === 'win32' ? path.join(root, 'node.exe') : path.join(root, 'bin', 'node')
-  const npmCli = process.platform === 'win32'
-    ? path.join(root, 'npm', 'bin', 'npm-cli.js')
-    : path.join(root, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  const node = path.join(root, 'node.exe')
+  const npmCli = path.join(root, 'npm', 'bin', 'npm-cli.js')
   const pnpmCli = path.join(resourcesPath, 'package-manager', 'pnpm', 'bin', 'pnpm.mjs')
   const commandDir = path.join(resourcesPath, 'runtime-bin')
-  const pnpmCommand = path.join(commandDir, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
-  const dshCommand = path.join(commandDir, process.platform === 'win32' ? 'dsh.cmd' : 'dsh')
+  const pnpmCommand = path.join(commandDir, 'pnpm.cmd')
+  const dshCommand = path.join(commandDir, 'dsh.cmd')
 
   if (existsSync(node) && existsSync(npmCli) && existsSync(pnpmCli) && existsSync(pnpmCommand) && existsSync(dshCommand)) {
     return { node, npmCli, pnpmCli, commandDir }

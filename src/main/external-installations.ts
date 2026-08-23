@@ -33,8 +33,7 @@ function isInside(parent: string, child: string): boolean {
 }
 
 function installationId(canonicalRoot: string): string {
-  const identity = process.platform === 'win32' ? canonicalRoot.toLowerCase() : canonicalRoot
-  return createHash('sha256').update(identity).digest('hex').slice(0, 16)
+  return createHash('sha256').update(canonicalRoot.toLowerCase()).digest('hex').slice(0, 16)
 }
 
 function rootFromBinDirectory(directory: string): ExternalCandidate | null {
@@ -156,4 +155,3 @@ export class ExternalInstallationManager {
     return ({ project: 0, path: 1, environment: 2, 'npm-global': 3 })[source]
   }
 }
-

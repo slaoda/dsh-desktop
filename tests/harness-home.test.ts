@@ -7,12 +7,11 @@ describe('resolveHarnessHome', () => {
     const userHome = path.resolve('C:\\Users\\tester')
     expect(resolveHarnessHome({}, userHome)).toBe(path.join(userHome, '.dsh'))
     expect(resolveHarnessHome({ DSH_HOME: '~/custom-dsh' }, userHome)).toBe(path.join(userHome, 'custom-dsh'))
-    expect(resolveHarnessHome({ DSH_HOME: 'C:\\HarnessData' }, userHome, 'win32')).toBe('C:\\HarnessData')
+    expect(resolveHarnessHome({ DSH_HOME: 'C:\\HarnessData' }, userHome)).toBe('C:\\HarnessData')
   })
 
   it('拒绝相对路径和 shell 表达式', () => {
-    expect(() => resolveHarnessHome({ DSH_HOME: 'relative/home' }, '/users/tester')).toThrow('绝对路径')
-    expect(() => resolveHarnessHome({ DSH_HOME: '$HOME/.dsh' }, '/users/tester')).toThrow('绝对路径')
+    expect(() => resolveHarnessHome({ DSH_HOME: 'relative/home' }, 'C:\\Users\\tester')).toThrow('绝对路径')
+    expect(() => resolveHarnessHome({ DSH_HOME: '$HOME/.dsh' }, 'C:\\Users\\tester')).toThrow('绝对路径')
   })
 })
-

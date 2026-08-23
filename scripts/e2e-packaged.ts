@@ -11,10 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 async function findExecutable(directory: string): Promise<string | null> {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const target = path.join(directory, entry.name)
-    if (process.platform === 'darwin' && target.endsWith(path.join('DSH Desktop.app'))) {
-      return path.join(target, 'Contents', 'MacOS', 'DSH Desktop')
-    }
-    if (process.platform === 'win32' && entry.isFile() && entry.name === 'DSH Desktop.exe') return target
+    if (entry.isFile() && entry.name === 'DSH Desktop.exe') return target
     if (entry.isDirectory()) {
       const found = await findExecutable(target)
       if (found) return found
@@ -25,19 +22,13 @@ async function findExecutable(directory: string): Promise<string | null> {
 
 const executablePath = await findExecutable(path.join(root, 'release'))
 if (!executablePath) throw new Error('release 目录中没有找到已打包的 DSH Desktop')
-const resourcesPath = process.platform === 'darwin'
-  ? path.resolve(executablePath, '..', '..', 'Resources')
-  : path.join(path.dirname(executablePath), 'resources')
-const packagedNode = process.platform === 'win32'
-  ? path.join(resourcesPath, 'runtime', 'node.exe')
-  : path.join(resourcesPath, 'runtime', 'bin', 'node')
-const packagedNpm = process.platform === 'win32'
-  ? path.join(resourcesPath, 'runtime', 'npm', 'bin', 'npm-cli.js')
-  : path.join(resourcesPath, 'runtime', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+const resourcesPath = path.join(path.dirname(executablePath), 'resources')
+const packagedNode = path.join(resourcesPath, 'runtime', 'node.exe')
+const packagedNpm = path.join(resourcesPath, 'runtime', 'npm', 'bin', 'npm-cli.js')
 const packagedPnpm = path.join(resourcesPath, 'package-manager', 'pnpm', 'bin', 'pnpm.mjs')
 const packagedRuntimeBin = path.join(resourcesPath, 'runtime-bin')
-const packagedPnpmCommand = path.join(packagedRuntimeBin, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
-const packagedDshCommand = path.join(packagedRuntimeBin, process.platform === 'win32' ? 'dsh.cmd' : 'dsh')
+const packagedPnpmCommand = path.join(packagedRuntimeBin, 'pnpm.cmd')
+const packagedDshCommand = path.join(packagedRuntimeBin, 'dsh.cmd')
 const packagedDshEntry = path.join(resourcesPath, 'dsh', '0.1.1-rc.2', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 if (!existsSync(packagedNode) || !existsSync(packagedNpm) || !existsSync(packagedPnpm) || !existsSync(packagedPnpmCommand) || !existsSync(packagedDshCommand) || !existsSync(packagedDshEntry)) {
   throw new Error(`打包应用的运行资源不完整：node=${existsSync(packagedNode)}, npm=${existsSync(packagedNpm)}, pnpm=${existsSync(packagedPnpm)}, pnpmCommand=${existsSync(packagedPnpmCommand)}, dshCommand=${existsSync(packagedDshCommand)}, dshEntry=${existsSync(packagedDshEntry)}`)
@@ -51,9 +42,7 @@ const packagedEnvironment = {
   DSH_DESKTOP_DSH_ENTRY: packagedDshEntry
 }
 const packagedPnpmVersion = await new Promise<string>((resolve, reject) => {
-  const executable = process.platform === 'win32' ? 'cmd.exe' : 'pnpm'
-  const args = process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm --version'] : ['--version']
-  const command = spawn(executable, args, { env: packagedEnvironment, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  const command = spawn('cmd.exe', ['/d', '/s', '/c', 'pnpm --version'], { env: packagedEnvironment, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
   let stdout = ''
   let stderr = ''
   command.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
@@ -63,9 +52,7 @@ const packagedPnpmVersion = await new Promise<string>((resolve, reject) => {
 })
 if (packagedPnpmVersion !== '11.22.0') throw new Error(`打包 pnpm 版本不正确：${packagedPnpmVersion}`)
 const packagedDshVersion = await new Promise<string>((resolve, reject) => {
-  const executable = process.platform === 'win32' ? 'cmd.exe' : 'dsh'
-  const args = process.platform === 'win32' ? ['/d', '/s', '/c', 'dsh --version'] : ['--version']
-  const command = spawn(executable, args, { env: packagedEnvironment, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  const command = spawn('cmd.exe', ['/d', '/s', '/c', 'dsh --version'], { env: packagedEnvironment, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
   let stdout = ''
   let stderr = ''
   command.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
@@ -90,12 +77,6 @@ await writeFile(path.join(failingPackageRoot, 'package.json'), JSON.stringify({
 }))
 await writeFile(path.join(failingPackageRoot, 'cli.js'), 'console.error("Error: packaged DSH startup fixture failed")\nprocess.exit(1)\n')
 const launchEnvironment: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: path.join(isolatedHome, 'official-dsh') }
-if (process.platform === 'darwin') {
-  for (const key of Object.keys(launchEnvironment)) {
-    if (key.toLowerCase() === 'path') delete launchEnvironment[key]
-  }
-  launchEnvironment.PATH = '/usr/bin:/bin:/usr/sbin:/sbin'
-}
 const electronApp = await electron.launch({
   executablePath,
   args: [`--user-data-dir=${path.join(isolatedHome, 'electron')}`],
@@ -139,9 +120,6 @@ try {
   const managerPromise = electronApp.waitForEvent('window', { timeout: 10_000 })
   await electronApp.evaluate(({ app, Menu }) => {
     if (app.name !== 'DSH Desktop') throw new Error(`应用名称不正确：${app.name}`)
-    if (process.platform === 'darwin' && Menu.getApplicationMenu()?.items[0]?.label !== 'DSH Desktop') {
-      throw new Error(`macOS 应用菜单名称不正确：${Menu.getApplicationMenu()?.items[0]?.label ?? 'missing'}`)
-    }
     if (!Menu.getApplicationMenu()?.getMenuItemById('about-dsh-desktop')) throw new Error('关于菜单不存在')
     if (!Menu.getApplicationMenu()?.getMenuItemById('check-for-updates')) throw new Error('应用更新菜单不存在')
     const item = Menu.getApplicationMenu()?.getMenuItemById('version-manager')
@@ -202,15 +180,13 @@ try {
       throw new Error('停止 Harness 后陈旧运行窗口仍然存在')
     }
   })
-  if (process.platform === 'win32') {
-    const startAtLogin = manager.getByRole('checkbox', { name: /开机启动|Start at login/ })
-    await startAtLogin.click()
-    await waitForStartAtLogin(true)
-    await waitForCheckboxState(startAtLogin, true)
-    await startAtLogin.click()
-    await waitForStartAtLogin(false)
-    await waitForCheckboxState(startAtLogin, false)
-  }
+  const startAtLogin = manager.getByRole('checkbox', { name: /开机启动|Start at login/ })
+  await startAtLogin.click()
+  await waitForStartAtLogin(true)
+  await waitForCheckboxState(startAtLogin, true)
+  await startAtLogin.click()
+  await waitForStartAtLogin(false)
+  await waitForCheckboxState(startAtLogin, false)
   const failingRow = manager.locator('article.version-row').filter({ has: manager.getByText(failingVersion, { exact: true }) })
   await failingRow.getByRole('button', { name: /切换|Switch/ }).click()
   const runtimeAlert = manager.getByRole('alert')

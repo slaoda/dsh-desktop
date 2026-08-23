@@ -46,9 +46,9 @@ export function summarizeDshFailure(output: string): string {
   return headline.slice(0, failureDetailLimit)
 }
 
-export function dshRuntimeEnvironment(environment: NodeJS.ProcessEnv, entries: string[], platform = process.platform): NodeJS.ProcessEnv {
+export function dshRuntimeEnvironment(environment: NodeJS.ProcessEnv, entries: string[]): NodeJS.ProcessEnv {
   return {
-    ...prependRuntimePath(environment, entries, platform),
+    ...prependRuntimePath(environment, entries),
     // pnpm 11 still blocks unapproved dependency build scripts, but this keeps
     // that safety decision from turning an otherwise valid plugin update into
     // ERR_PNPM_IGNORED_BUILDS. This setting is scoped to the official DSH child.
@@ -60,11 +60,10 @@ export function dshChildEnvironment(
   environment: NodeJS.ProcessEnv,
   dsh: ResolvedDsh,
   nodePath: string,
-  runtimePathEntries: string[],
-  platform = process.platform
+  runtimePathEntries: string[]
 ): NodeJS.ProcessEnv {
   return {
-    ...dshRuntimeEnvironment(environment, runtimePathEntries, platform),
+    ...dshRuntimeEnvironment(environment, runtimePathEntries),
     DSH_DESKTOP_NODE: nodePath,
     DSH_DESKTOP_DSH_ENTRY: dsh.entry
   }
