@@ -109,6 +109,14 @@ async function waitForStartAtLogin(expected: boolean): Promise<void> {
   }
   throw new Error(expected ? '开机启动设置未写入 Windows' : '关闭开机启动后 Windows 设置仍然存在')
 }
+async function waitForCheckboxState(locator: { isChecked(): Promise<boolean> }, expected: boolean): Promise<void> {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    if (await locator.isChecked() === expected) return
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error('开机启动复选框未同步主进程状态')
+}
 const applicationProcess = electronApp.process()
 let applicationOutput = ''
 const collectOutput = (chunk: Buffer | string): void => {
@@ -196,10 +204,12 @@ try {
   })
   if (process.platform === 'win32') {
     const startAtLogin = manager.getByRole('checkbox', { name: /开机启动|Start at login/ })
-    await startAtLogin.check()
+    await startAtLogin.click()
     await waitForStartAtLogin(true)
-    await startAtLogin.uncheck()
+    await waitForCheckboxState(startAtLogin, true)
+    await startAtLogin.click()
     await waitForStartAtLogin(false)
+    await waitForCheckboxState(startAtLogin, false)
   }
   const failingRow = manager.locator('article.version-row').filter({ has: manager.getByText(failingVersion, { exact: true }) })
   await failingRow.getByRole('button', { name: /切换|Switch/ }).click()
