@@ -65,10 +65,13 @@ if (packagedDshVersion !== '0.1.1-rc.2') throw new Error(`打包 dsh 版本不�
 const isolatedHome = await mkdtemp(path.join(os.tmpdir(), 'dsh-desktop-e2e-'))
 const removableVersion = '0.0.1'
 const failingVersion = '0.0.2'
+const repairVersion = '0.0.3'
 const removablePackageRoot = path.join(isolatedHome, 'electron', 'dsh-versions', removableVersion, 'node_modules', '@deepseek-ai', 'dsh')
 const failingPackageRoot = path.join(isolatedHome, 'electron', 'dsh-versions', failingVersion, 'node_modules', '@deepseek-ai', 'dsh')
+const repairPackageRoot = path.join(isolatedHome, 'electron', 'dsh-versions', repairVersion, 'node_modules', '@deepseek-ai', 'dsh')
 await mkdir(removablePackageRoot, { recursive: true })
 await mkdir(failingPackageRoot, { recursive: true })
+await mkdir(repairPackageRoot, { recursive: true })
 await writeFile(path.join(removablePackageRoot, 'package.json'), JSON.stringify({
   name: '@deepseek-ai/dsh', version: removableVersion, bin: { dsh: 'cli.js' }
 }))
@@ -77,7 +80,22 @@ await writeFile(path.join(failingPackageRoot, 'package.json'), JSON.stringify({
   name: '@deepseek-ai/dsh', version: failingVersion, bin: { dsh: 'cli.js' }
 }))
 await writeFile(path.join(failingPackageRoot, 'cli.js'), 'console.error("Error: packaged DSH startup fixture failed")\nprocess.exit(1)\n')
-const launchEnvironment: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: path.join(isolatedHome, 'official-dsh') }
+await writeFile(path.join(repairPackageRoot, 'package.json'), JSON.stringify({
+  name: '@deepseek-ai/dsh', version: repairVersion, bin: { dsh: 'cli.js' }
+}))
+await writeFile(path.join(repairPackageRoot, 'cli.js'), await readFile(path.join(root, 'tests/fixtures/fake-repair-dsh.mjs'), 'utf8'))
+const harnessHome = path.join(isolatedHome, 'official-dsh')
+await mkdir(path.join(harnessHome, 'profiles', 'web'), { recursive: true })
+await writeFile(path.join(harnessHome, 'profiles', 'web', 'package.json'), JSON.stringify({
+  private: true,
+  dependencies: { '@e2e/dsh-conflict': '1.0.0' }
+}))
+await writeFile(path.join(isolatedHome, 'electron', 'desktop-state.json'), JSON.stringify({
+  schemaVersion: 6,
+  selectedVersion: repairVersion,
+  repairMode: 'auto'
+}))
+const launchEnvironment: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: harnessHome }
 const electronApp = await electron.launch({
   executablePath,
   args: [`--user-data-dir=${path.join(isolatedHome, 'electron')}`],
@@ -132,6 +150,19 @@ try {
   await manager.getByRole('heading', { name: /版本管理|Version Manager/ }).waitFor()
   await manager.getByRole('heading', { name: /^DSH\s+\d+\.\d+\.\d+/ }).waitFor()
   await manager.getByRole('button', { name: /全部版本|All versions/ }).waitFor()
+  const repairCard = manager.locator('.repair-card')
+  await repairCard.getByRole('heading', { name: /修复成功|Repair succeeded/ }).waitFor()
+  await repairCard.getByText('@e2e/dsh-conflict', { exact: true }).waitFor()
+  await repairCard.locator('summary').click()
+  await repairCard.getByText(/1 \/ 1/, { exact: true }).first().waitFor()
+  await repairCard.getByRole('button', { name: /复制报告|Copy report/ }).click()
+  await repairCard.getByRole('button', { name: /报告已复制|Report copied/ }).waitFor()
+  const recoveredReport = await electronApp.evaluate(({ clipboard }) => clipboard.readText())
+  if (!recoveredReport.includes('category: plugin-conflict') || !recoveredReport.includes('repairAttempts: 1') || !recoveredReport.includes('retryAttempts: 1')) {
+    throw new Error(`插件冲突修复报告不完整：${recoveredReport}`)
+  }
+  await repairCard.getByRole('button', { name: /保持禁用|Keep disabled/ }).click()
+  await repairCard.getByText(/继续禁用|remain disabled/).waitFor()
   const installVersion = process.env.DSH_DESKTOP_E2E_INSTALL_VERSION
   if (installVersion) {
     const targetRow = manager.locator('article.version-row').filter({ hasText: installVersion })
@@ -200,8 +231,14 @@ try {
   await runtimeAlert.getByRole('button', { name: /已复制|Copied/ }).waitFor()
   const copiedError = await electronApp.evaluate(({ clipboard }) => clipboard.readText())
   if (!copiedError.includes('packaged DSH startup fixture failed')) throw new Error(`复制的启动错误不正确：${copiedError}`)
+  await repairCard.getByRole('button', { name: /复制报告|Copy report/ }).click()
+  await repairCard.getByRole('button', { name: /报告已复制|Report copied/ }).waitFor()
+  const unknownReport = await electronApp.evaluate(({ clipboard }) => clipboard.readText())
+  if (!unknownReport.includes('category: unknown') || !unknownReport.includes('repairAttempts: 0') || !unknownReport.includes('retryAttempts: 0')) {
+    throw new Error(`未知错误诊断报告不正确：${unknownReport}`)
+  }
   if (process.env.DSH_DESKTOP_E2E_SCREENSHOT) await manager.screenshot({ path: process.env.DSH_DESKTOP_E2E_SCREENSHOT, fullPage: true })
-  console.log('Packaged E2E passed: selected dsh CLI, bundled pnpm, direct official DSH launch, version removal, manager UI, close-to-tray, runtime error details, clipboard copy, and explicit stop')
+  console.log('Packaged E2E passed: plugin conflict repair, one retry, unknown-error diagnosis, selected dsh CLI, bundled pnpm, version removal, manager UI, close-to-tray, clipboard copy, and explicit stop')
 } finally {
   try { await electronApp.evaluate(({ app }) => app.setLoginItemSettings({ openAtLogin: false })) } catch { /* The app may already be closed. */ }
   await electronApp.close()
