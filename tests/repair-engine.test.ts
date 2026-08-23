@@ -163,7 +163,7 @@ describe('RepairEngine', () => {
     expect(await fixture.quarantine.list()).toEqual([])
   })
 
-  it('仅诊断模式不会把需确认动作显示为等待修复', async () => {
+  it('未实现的配置层动作不会显示为可确认修复', async () => {
     const fixture = await createFixture()
     const engine = new RepairEngine({
       supervisor: { start: async () => { throw new Error('YAMLException: profiles\\web\\cordis.patch.yml invalid') } },
@@ -172,9 +172,11 @@ describe('RepairEngine', () => {
       backups: { hasSource: async () => true, create: async () => undefined }
     })
 
-    await expect(engine.launch(fixture.dsh, 'diagnose')).rejects.toMatchObject({
-      session: { phase: 'failed', outcome: 'failed', diagnosis: { category: 'plugin-config' } }
-    })
+    for (const mode of ['auto', 'diagnose'] as const) {
+      await expect(engine.launch(fixture.dsh, mode)).rejects.toMatchObject({
+        session: { phase: 'failed', outcome: 'failed', diagnosis: { category: 'plugin-config' } }
+      })
+    }
   })
 
   it('日志中的 entry id 不在官方配置转储中时拒绝自动隔离', async () => {
