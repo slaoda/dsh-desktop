@@ -94,21 +94,41 @@ jobs:
         run: |
           node scripts/version.mjs check
           node -e "const p=require('./package.json'); if (process.env.RELEASE_TAG !== 'v'+p.version) throw new Error('Git tag must equal v'+p.version)"
+      - name: Check for an existing immutable release
+        id: existing-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+            for asset in "DSH-Desktop-Setup-${RELEASE_TAG#v}-x64.exe" SHA256SUMS-win32-x64 dsh-desktop-sbom.cdx.json official-dsh-sbom.cdx.json THIRD-PARTY-LICENSES.txt; do
+              if ! grep -Fxq "$asset" <<< "$assets"; then
+                echo "Immutable release is missing required asset: $asset" >&2
+                exit 1
+              fi
+            done
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Extract release notes from CHANGELOG.md
+        if: steps.existing-release.outputs.exists != 'true'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node scripts/extract-changelog.mjs "$RELEASE_TAG" CHANGELOG.md > release-notes.md
       - uses: actions/download-artifact@v8
+        if: steps.existing-release.outputs.exists != 'true'
         with:
           pattern: dsh-desktop-*
           path: release
           merge-multiple: true
       - uses: softprops/action-gh-release@v3
+        if: steps.existing-release.outputs.exists != 'true'
         with:
           name: DSH Desktop ${{ github.ref_name }}
           body_path: release-notes.md
           prerelease: ${{ contains(github.ref_name, '-') }}
-          overwrite_files: true
           files: |
             release/*.exe
             release/SHA256SUMS-win32-x64
