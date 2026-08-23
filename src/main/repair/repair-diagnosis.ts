@@ -35,7 +35,7 @@ function safeEntryId(message: string): string | undefined {
 function safePackageName(message: string): string | undefined {
   const patterns = [
     /\bCannot find package\s+["']([^"']+)["']/i,
-    /\b(?:plugin|from|package)\s+["']?(@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)["']?/i
+    /\b(?:from\s+package|plugin|from|package)\s+["']?(@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)["']?/i
   ]
   for (const pattern of patterns) {
     const candidate = pattern.exec(message)?.[1]

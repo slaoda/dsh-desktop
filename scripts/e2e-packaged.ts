@@ -101,6 +101,16 @@ const electronApp = await electron.launch({
   args: [`--user-data-dir=${path.join(isolatedHome, 'electron')}`],
   env: { ...launchEnvironment, ELECTRON_ENABLE_LOGGING: '1' }
 })
+async function waitForManagerWindow() {
+  const deadline = Date.now() + 30_000
+  while (Date.now() < deadline) {
+    const manager = electronApp.windows().find((candidate) => /\/renderer\/index\.html(?:$|[?#])/.test(candidate.url().replace(/\\/g, '/')))
+    if (manager) return manager
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  const windows = electronApp.windows().map((candidate) => `${candidate.url()} (${candidate.viewportSize()?.width ?? '?'}x${candidate.viewportSize()?.height ?? '?'})`)
+  throw new Error(`未找到版本管理窗口，当前窗口：${windows.join(', ')}`)
+}
 async function waitForStartAtLogin(expected: boolean): Promise<void> {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
@@ -136,7 +146,6 @@ try {
   await dshWindow.waitForLoadState('domcontentloaded')
   const hasOfficialBootstrap = await dshWindow.evaluate(() => '__DSH_BOOT__' in window)
   if (!hasOfficialBootstrap) throw new Error('DSH 窗口缺少官方启动标记')
-  const managerPromise = electronApp.waitForEvent('window', { timeout: 10_000 })
   await electronApp.evaluate(({ app, Menu }) => {
     if (app.name !== 'DSH Desktop') throw new Error(`应用名称不正确：${app.name}`)
     if (!Menu.getApplicationMenu()?.getMenuItemById('about-dsh-desktop')) throw new Error('关于菜单不存在')
@@ -146,7 +155,7 @@ try {
     if (!item.icon || (typeof item.icon !== 'string' && item.icon.isEmpty())) throw new Error('版本管理菜单图标不存在')
     item.click(item, undefined, undefined)
   })
-  const manager = await managerPromise
+  const manager = await waitForManagerWindow()
   await manager.getByRole('heading', { name: /版本管理|Version Manager/ }).waitFor()
   await manager.getByRole('heading', { name: /^DSH\s+\d+\.\d+\.\d+/ }).waitFor()
   await manager.getByRole('button', { name: /全部版本|All versions/ }).waitFor()

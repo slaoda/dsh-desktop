@@ -33,6 +33,19 @@ describe('diagnoseStartupFailure', () => {
     expect(diagnosis).toMatchObject({ category: 'plugin-conflict', confidence: 'medium', action: null })
   })
 
+  it('从 from package 错误格式提取真实包名而不是关键字', () => {
+    const diagnosis = diagnoseStartupFailure({
+      message: 'Error: duplicate entry id "plugin:web:e2e-conflict" from package "@e2e/dsh-conflict"',
+      source: 'installed',
+      version: '0.1.0-rc.8'
+    })
+
+    expect(diagnosis.candidate).toMatchObject({
+      entryId: 'plugin:web:e2e-conflict',
+      packageName: '@e2e/dsh-conflict'
+    })
+  })
+
   it('缺失第三方包归类为插件缺失但不会猜测修复动作', () => {
     const diagnosis = diagnoseStartupFailure({
       message: "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@example/dsh-calendar' imported from C:\\Users\\example\\.dsh\\profiles\\web",
