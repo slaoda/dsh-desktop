@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const releaseDir = path.join(root, 'release')
 const dshRoot = path.join(root, 'build-resources', 'dsh', '0.1.1-rc.2')
+const desktopManifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')) as { version: string }
 
 async function npmSbom(cwd: string, omitDev: boolean): Promise<string> {
   const npmCli = process.env.npm_execpath
@@ -54,7 +55,9 @@ const licenseLines = [
 ].sort()
 await writeFile(path.join(releaseDir, 'THIRD-PARTY-LICENSES.txt'), `Component\tPackage\tVersion\tLicense\n${licenseLines.join('\n')}\n`)
 
-const artifacts = (await readdir(releaseDir)).filter((name) => /\.(dmg|zip|exe)$/i.test(name)).sort()
+const expectedInstaller = `DSH-Desktop-Setup-${desktopManifest.version}-x64.exe`
+const artifacts = (await readdir(releaseDir)).filter((name) => name === expectedInstaller)
+if (artifacts.length !== 1) throw new Error(`缺少当前版本 Windows x64 安装包：${expectedInstaller}`)
 const sums: string[] = []
 for (const artifact of artifacts) {
   const digest = createHash('sha256').update(await readFile(path.join(releaseDir, artifact))).digest('hex')

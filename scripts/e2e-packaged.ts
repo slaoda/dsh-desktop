@@ -1,12 +1,13 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright-core'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const desktopManifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')) as { version: string }
 
 async function findExecutable(directory: string): Promise<string | null> {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -148,7 +149,7 @@ try {
   if (existsSync(path.join(isolatedHome, 'electron', 'dsh-versions', removableVersion))) throw new Error('卸载后版本目录仍然存在')
   await manager.getByText(/npm 官方源|Official npm registry/).waitFor()
   await manager.getByRole('heading', { name: /^DSH\s+\d+\.\d+\.\d+/ }).waitFor()
-  await manager.getByText('v0.3.0', { exact: true }).waitFor()
+  await manager.getByText(`v${desktopManifest.version}`, { exact: true }).waitFor()
   const languageSwitch = manager.getByRole('button', { name: /切换为英文|切换为中文/ })
   await languageSwitch.waitFor()
   const initialSwitchLabel = await languageSwitch.getAttribute('aria-label')

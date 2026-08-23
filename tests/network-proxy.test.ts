@@ -34,7 +34,7 @@ describe('network proxy', () => {
     expect(target.setProxy).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'fixed_servers', proxyRules: 'http://127.0.0.1:7890' }))
   })
 
-  it('把探测结果应用到独立的应用更新会话', async () => {
+  it('把探测结果应用到应用网络会话', async () => {
     const target = fakeSession('DIRECT')
     await applyNetworkProxy(target, { source: 'local', url: 'http://127.0.0.1:7890' })
     expect(target.setProxy).toHaveBeenCalledWith(expect.objectContaining({ proxyRules: 'http://127.0.0.1:7890' }))
