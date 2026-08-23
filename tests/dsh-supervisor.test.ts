@@ -50,6 +50,11 @@ describe('DshSupervisor', () => {
     expect(dshWebArguments({ version: '0.1.0-rc.6', root, entry, source: 'installed' })).toEqual([entry, 'web', '--port', '0'])
     expect(dshWebArguments({ version: '0.1.0-rc.8', root, entry, source: 'installed' })).toEqual([entry, 'web', '--no-open', '--port', '0'])
     expect(dshWebArguments({ version: '0.1.0', root, entry, source: 'installed' })).toEqual([entry, 'web', '--no-open', '--port', '0'])
+    expect(dshWebArguments(
+      { version: '0.1.0', root, entry, source: 'installed' },
+      path.resolve('C:\\desktop\\repair\\quarantine.patch.json')
+    )).toEqual([entry, 'web', '--patch', path.resolve('C:\\desktop\\repair\\quarantine.patch.json'), '--no-open', '--port', '0'])
+    expect(() => dshWebArguments({ version: '0.1.0', root, entry, source: 'installed' }, '../outside.patch.json')).toThrow('绝对路径')
   })
 
   it('把应用私有命令目录放到 PATH 前面并去重', () => {
@@ -76,7 +81,10 @@ describe('DshSupervisor', () => {
 
   it('启动假 CLI、进入运行状态并正常停止', async () => {
     supervisor = new DshSupervisor(process.execPath)
-    const url = await supervisor.start({ version: '1.0.0', root, entry: path.join(root, 'tests/fixtures/fake-dsh.mjs'), source: 'installed' }, 5_000)
+    const url = await supervisor.start(
+      { version: '1.0.0', root, entry: path.join(root, 'tests/fixtures/fake-dsh.mjs'), source: 'installed' },
+      { timeoutMs: 5_000, stabilityMs: 0 }
+    )
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
     expect(supervisor.status).toBe('running')
     await supervisor.stop()
@@ -85,7 +93,10 @@ describe('DshSupervisor', () => {
 
   it('启动失败时把官方 DSH 的错误输出附在退出码后面', async () => {
     supervisor = new DshSupervisor(process.execPath)
-    const launch = supervisor.start({ version: '1.0.0', root, entry: path.join(root, 'tests/fixtures/fake-dsh-fail.mjs'), source: 'installed' }, 5_000)
+    const launch = supervisor.start(
+      { version: '1.0.0', root, entry: path.join(root, 'tests/fixtures/fake-dsh-fail.mjs'), source: 'installed' },
+      { timeoutMs: 5_000, stabilityMs: 0 }
+    )
     await expect(launch).rejects.toThrow('官方 DSH 启动失败（退出码 1）：Error: dsh: plugin tree failed to load: the value for "version" in C:\\Users\\example\\.dsh\\.credentials.yaml must be a string')
     expect(supervisor.status).toBe('failed')
   })
@@ -99,7 +110,17 @@ describe('DshSupervisor', () => {
     supervisor = new DshSupervisor(process.execPath, [commandDirectory])
     const url = await supervisor.start({
       version: '1.0.0', root: directory, entry: path.join(root, 'tests/fixtures/fake-dsh.mjs'), source: 'installed'
-    }, 5_000)
+    }, { timeoutMs: 5_000, stabilityMs: 0 })
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
+  })
+
+  it('本地 URL 无法通过 HTTP 健康检查时不会进入运行状态', async () => {
+    supervisor = new DshSupervisor(process.execPath, [], async () => false)
+    const launch = supervisor.start(
+      { version: '1.0.0', root, entry: path.join(root, 'tests/fixtures/fake-dsh.mjs'), source: 'installed' },
+      { timeoutMs: 5_000, stabilityMs: 0 }
+    )
+    await expect(launch).rejects.toThrow('健康检查')
+    expect(supervisor.status).toBe('failed')
   })
 })

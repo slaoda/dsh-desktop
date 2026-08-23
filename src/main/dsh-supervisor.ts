@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import os from 'node:os'
+import path from 'node:path'
 import semver from 'semver'
 import type { RuntimeStatus } from '../shared/contracts'
 import type { ResolvedDsh } from './version-manager'
@@ -10,8 +11,16 @@ export { prependRuntimePath } from './runtime-path-environment'
 
 const noOpenMinimumVersion = '0.1.0-rc.8'
 
-export function dshWebArguments(dsh: ResolvedDsh): string[] {
-  return [dsh.entry, 'web', ...(semver.gte(dsh.version, noOpenMinimumVersion) ? ['--no-open'] : []), '--port', '0']
+export function dshWebArguments(dsh: ResolvedDsh, repairOverlay: string | null = null): string[] {
+  if (repairOverlay !== null && !path.isAbsolute(repairOverlay)) throw new Error('插件隔离 Overlay 必须使用绝对路径')
+  return [
+    dsh.entry,
+    'web',
+    ...(repairOverlay ? ['--patch', repairOverlay] : []),
+    ...(semver.gte(dsh.version, noOpenMinimumVersion) ? ['--no-open'] : []),
+    '--port',
+    '0'
+  ]
 }
 
 export function parseLoopbackUrl(output: string): string | null {
@@ -69,21 +78,57 @@ export function dshChildEnvironment(
   }
 }
 
+export interface DshStartOptions {
+  timeoutMs?: number
+  stabilityMs?: number
+  healthTimeoutMs?: number
+  repairOverlay?: string | null
+}
+
+export type DshHealthProbe = (url: string, timeoutMs: number) => Promise<boolean>
+
+async function probeLoopback(url: string, timeoutMs: number): Promise<boolean> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, { method: 'GET', redirect: 'error', signal: controller.signal })
+    await response.body?.cancel()
+    return true
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function boundedDuration(value: number | undefined, fallback: number, minimum: number, maximum: number, label: string): number {
+  const resolved = value ?? fallback
+  if (!Number.isInteger(resolved) || resolved < minimum || resolved > maximum) throw new Error(`${label}无效`)
+  return resolved
+}
+
 export class DshSupervisor extends EventEmitter {
   status: RuntimeStatus = 'idle'
   url: string | null = null
   private child: ChildProcessWithoutNullStreams | null = null
 
-  constructor(private readonly nodePath: string, private readonly runtimePathEntries: string[] = []) {
+  constructor(
+    private readonly nodePath: string,
+    private readonly runtimePathEntries: string[] = [],
+    private readonly healthProbe: DshHealthProbe = probeLoopback
+  ) {
     super()
   }
 
-  async start(dsh: ResolvedDsh, timeoutMs = 30_000): Promise<string> {
+  async start(dsh: ResolvedDsh, options: DshStartOptions = {}): Promise<string> {
     if (this.child || this.status === 'starting' || this.status === 'running') throw new Error('DSH 已经在运行')
+    const timeoutMs = boundedDuration(options.timeoutMs, 30_000, 100, 120_000, '启动超时')
+    const stabilityMs = boundedDuration(options.stabilityMs, 2_000, 0, 10_000, '启动稳定窗口')
+    const healthTimeoutMs = boundedDuration(options.healthTimeoutMs, 3_000, 100, 10_000, '健康检查超时')
     this.setStatus('starting')
 
     return await new Promise<string>((resolve, reject) => {
-      const child = spawn(this.nodePath, dshWebArguments(dsh), {
+      const child = spawn(this.nodePath, dshWebArguments(dsh, options.repairOverlay ?? null), {
         cwd: os.homedir(),
         // Official plugin management invokes `dsh` by name. The Desktop-owned
         // launcher delegates to this exact validated entry without using pnpm's
@@ -95,12 +140,14 @@ export class DshSupervisor extends EventEmitter {
       })
       child.stdin.end()
       this.child = child
-      let settled = false
+      let completed = false
+      let candidateUrl: string | null = null
       let buffer = ''
       const finishWithError = (message: string): void => {
-        if (settled) return
-        settled = true
+        if (completed) return
+        completed = true
         clearTimeout(timer)
+        if (!child.killed) child.kill()
         this.child = null
         this.url = null
         this.setStatus('failed')
@@ -110,12 +157,22 @@ export class DshSupervisor extends EventEmitter {
       const consume = (chunk: Buffer | string): void => {
         buffer = `${buffer}${chunk.toString()}`.slice(-8_192)
         const url = parseLoopbackUrl(buffer)
-        if (!url || settled) return
-        settled = true
-        clearTimeout(timer)
-        this.url = url
-        this.setStatus('running')
-        resolve(url)
+        if (!url || candidateUrl || completed) return
+        candidateUrl = url
+        void (async () => {
+          if (stabilityMs > 0) await new Promise<void>((done) => setTimeout(done, stabilityMs))
+          if (completed || this.child !== child) return
+          if (!await this.healthProbe(url, healthTimeoutMs)) {
+            finishWithError('官方 DSH 未通过本机 HTTP 健康检查')
+            return
+          }
+          if (completed || this.child !== child) return
+          completed = true
+          clearTimeout(timer)
+          this.url = url
+          this.setStatus('running')
+          resolve(url)
+        })()
       }
       const timer = setTimeout(() => {
         child.kill()
@@ -128,7 +185,7 @@ export class DshSupervisor extends EventEmitter {
         clearTimeout(timer)
         this.child = null
         this.url = null
-        if (!settled) finishWithError(`官方 DSH 启动失败（退出码 ${code ?? 'unknown'}）`)
+        if (!completed) finishWithError(`官方 DSH 启动失败（退出码 ${code ?? 'unknown'}）`)
         else {
           this.status = code === 0 ? 'idle' : 'failed'
           this.emit('status', this.status)

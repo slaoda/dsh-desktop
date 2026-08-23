@@ -61,9 +61,9 @@
 **说明：** 为托管版本增加官方配置转储预检，并在 URL 出现后验证进程稳定和回环 HTTP 响应。
 
 **验收：**
-- [ ] `--dump-config` 使用精确 DSH 入口、`shell: false`、私有运行环境和超时。
-- [ ] 隔离 Overlay 参数只接受管理器生成的绝对路径。
-- [ ] 进程提前退出或回环 HTTP 无响应不会标记为成功。
+- [x] `--dump-config` 使用精确 DSH 入口、`shell: false`、私有运行环境和超时。
+- [x] 隔离 Overlay 参数只接受管理器生成的绝对路径。
+- [x] 进程提前退出或回环 HTTP 无响应不会标记为成功。
 
 **验证：** `npm test -- tests/dsh-preflight.test.ts tests/dsh-supervisor.test.ts`。
 **依赖：** 任务 4。
