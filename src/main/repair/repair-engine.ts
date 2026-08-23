@@ -134,7 +134,7 @@ export class RepairEngine extends EventEmitter implements StartupRepairEngine {
     session = this.publish({ ...session, diagnosis })
 
     if (!mayAutoRepair(diagnosis, mode)) {
-      const awaiting = diagnosis.action !== null && (mode === 'ask' || diagnosis.action.requiresConfirmation)
+      const awaiting = mode !== 'diagnose' && diagnosis.action !== null && (mode === 'ask' || diagnosis.action.requiresConfirmation)
       session = this.publish({
         ...session,
         phase: awaiting ? 'awaiting-confirmation' : 'failed',
