@@ -8,6 +8,18 @@ DSH Desktop 自带 Node.js、pnpm 和经过校验的官方 `@deepseek-ai/dsh`，
 
 > 本项目由社区独立维护，与 DeepSeek 官方无隶属关系。管理器不修改官方 Harness。
 
+## 项目来源与二次开发说明
+
+DSH Desktop 是围绕 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 进行的社区二次开发，目标是在不改变 Harness 核心能力和配置语义的前提下，为 Windows 11 用户补充图形化安装、版本管理与故障恢复体验。它不是 DeepSeek 官方桌面版，也不是官方仓库的替代品。
+
+- **上游项目：** [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)，官方网站为 [deepseek.com/harness](https://deepseek.com/harness)。
+- **上游提供：** Harness 核心、CLI、Web 界面、插件体系及官方 `@deepseek-ai/dsh` 包。
+- **本项目新增：** Windows 安装器、Electron 桌面外壳、版本检测/安装/切换/卸载、备份回滚、托盘、代理设置、启动诊断与安全修复 GUI。
+- **集成方式：** 发布包携带经过版本和入口校验的官方 Harness 包；管理器通过公开 CLI 能力启动和管理它，不把上游核心源码改写成本项目实现。
+- **问题反馈：** 桌面安装、版本管理或启动修复问题请提交到本仓库；Harness 核心和插件行为问题应先在上游项目中确认。
+
+名称与链接仅用于说明项目来源和兼容关系。详细版权及许可证归属见 [NOTICE.md](NOTICE.md)。
+
 ## 功能
 
 - Windows 11 x64 图形化安装程序，支持自定义安装目录。
@@ -73,4 +85,4 @@ npm run test:packaged
 
 ## 许可证
 
-桌面管理器代码使用 [MIT License](LICENSE)。官方 Harness 及其依赖按各自许可证运行。
+桌面管理器代码使用 [MIT License](LICENSE)。DeepSeek Harness 使用其上游 [MIT License](https://github.com/deepseek-ai/deepseek-harness/blob/master/LICENSE)，官方 Harness 及其他第三方依赖仍按各自许可证授权；完整归属说明见 [NOTICE.md](NOTICE.md)，Windows Release 同时附带第三方许可证清单。
